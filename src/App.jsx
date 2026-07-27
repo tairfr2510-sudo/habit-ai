@@ -172,9 +172,9 @@ export default function App() {
   const fetchAIInsight = async () => {
     setIsAiLoading(true);
     
-    const apiKey = "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"; 
+    const apiKey = ""; 
     
-    if (!apiKey || apiKey === "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") {
+    if (!apiKey || apiKey === "") {
        setAiInsight("יש להזין מפתח API של Groq בקוד כדי לקבל תובנות.");
        setIsAiLoading(false);
        return;
