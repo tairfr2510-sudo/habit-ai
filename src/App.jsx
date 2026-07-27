@@ -31,7 +31,7 @@ const CATEGORIES = [
 ];
 
 const INITIAL_HABITS = [
-  { id: '1', name: 'שתיית 2 ליטר מים', category: 'health', frequency: { type: 'daily' }, logs: {}, createdAt: new Date().toISOString() },
+  { id: '1', name: 'שתיית 3 ליטר מים', category: 'health', frequency: { type: 'daily' }, logs: {}, createdAt: new Date().toISOString() },
   { id: '2', name: 'מדיטציה 10 דקות', category: 'mind', frequency: { type: 'daily' }, logs: {}, createdAt: new Date().toISOString() },
   { id: '3', name: 'אימון כוח', category: 'health', frequency: { type: 'weekly', target: 3 }, logs: {}, createdAt: new Date().toISOString() },
 ];
