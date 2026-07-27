@@ -172,13 +172,7 @@ export default function App() {
   const fetchAIInsight = async () => {
     setIsAiLoading(true);
     
-    const apiKey = ""; 
-    
-    if (!apiKey || apiKey === "") {
-       setAiInsight("יש להזין מפתח API של Groq בקוד כדי לקבל תובנות.");
-       setIsAiLoading(false);
-       return;
-    }
+    const apiKey = import.meta.env.VITE_GROQ_API_KEY;; 
 
     const prompt = `
       אני מנהל מעקב אחרי ההרגלים שלי במטרה להפוך לגרסה הטובה ביותר של עצמי. 
