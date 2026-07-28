@@ -11,7 +11,10 @@ import {
   Trophy,
   Sparkles,
   Flame,
-  LayoutDashboard
+  LayoutDashboard,
+  Star,
+  Target,
+  Zap
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -20,7 +23,9 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer
+  ResponsiveContainer,
+  AreaChart,
+  Area
 } from 'recharts';
 
 const CATEGORIES = [
@@ -81,9 +86,12 @@ export default function App() {
 
   const [aiInsight, setAiInsight] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  
+  // Gamification state derived from habits
+  const [userStats, setUserStats] = useState({ xp: 0, level: 1, xpNextLevel: 100 });
 
   useEffect(() => {
-    const savedHabits = localStorage.getItem('habitTracker_data');
+    const savedHabits = localStorage.getItem('habitTracker_data_v2');
     if (savedHabits) {
       setHabits(JSON.parse(savedHabits));
     } else {
@@ -94,7 +102,29 @@ export default function App() {
 
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem('habitTracker_data', JSON.stringify(habits));
+      localStorage.setItem('habitTracker_data_v2', JSON.stringify(habits));
+      
+      // Calculate XP and Levels
+      let totalCompletions = 0;
+      habits.forEach(habit => {
+        totalCompletions += Object.keys(habit.logs).length;
+      });
+      
+      const xpPerCompletion = 15;
+      const totalXP = totalCompletions * xpPerCompletion;
+      const level = Math.floor(Math.sqrt(totalXP / 20)) + 1; // Scaling level up slower
+      const xpForCurrentLevel = 20 * Math.pow(level - 1, 2);
+      const xpForNextLevel = 20 * Math.pow(level, 2);
+      const xpProgress = totalXP - xpForCurrentLevel;
+      const xpRequired = xpForNextLevel - xpForCurrentLevel;
+
+      setUserStats({
+        totalXP,
+        level,
+        xpProgress,
+        xpRequired,
+        percentToNext: Math.min(100, Math.max(0, (xpProgress / xpRequired) * 100))
+      });
     }
   }, [habits, isLoaded]);
 
@@ -147,7 +177,7 @@ export default function App() {
       
       if (habitLogs[dateStr]) {
         streak++;
-      } else if (i !== 0) { 
+      } else if (i !== 0) { // allow missing today without breaking past streak immediately
         break;
       }
     }
@@ -172,42 +202,44 @@ export default function App() {
   const fetchAIInsight = async () => {
     setIsAiLoading(true);
     
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY;; 
+    // Using Gemini API seamlessly
+    const apiKey = ""; 
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const prompt = `
-      אני מנהל מעקב אחרי ההרגלים שלי במטרה להפוך לגרסה הטובה ביותר של עצמי. 
-      אלו הנתונים הנוכחיים שלי: ${JSON.stringify(habits)}.
+      אני מנהל מעקב אחרי ההרגלים שלי באפליקציית HabitAI. 
+      אלו הנתונים הנוכחיים שלי (בפורמט JSON): ${JSON.stringify(habits)}.
       אנא נתח את הדפוסים שלי:
-      1. תן לי חיזוק חיובי על הרגלים שאני מצליח בהם.
-      2. זהה אזורים שבהם אני מתקשה והצע אסטרטגיה קונקרטית ואחת בלבד כדי להשתפר מחר.
-      היה תמציתי וממוקד, וכתוב בעברית בלבד.
+      1. תן לי חיזוק חיובי קצרצר על הרגלים שאני מצליח בהם.
+      2. זהה אזורים שבהם אני מתקשה והצע אסטרטגיה קונקרטית, קצרה ויישומית אחת כדי להשתפר.
+      כתוב את התשובה כפסקה זורמת אחת, בעברית טבעית, חמה ומעודדת. אל תשתמש בפורמט של רשימות ארוכות.
     `;
 
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: {
+            parts: [{ text: "אתה מאמן אישי ידידותי ואנרגטי שעוזר למשתמש להפוך לגרסה הטובה ביותר של עצמו. השב תמיד בעברית קולחת וטבעית." }]
+        }
+    };
+
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "llama3-70b-8192", 
-          messages: [
-            { role: "system", content: "אתה מאמן אישי שעוזר למשתמש להפוך לגרסה הטובה ביותר של עצמו דרך בניית הרגלים. השב תמיד בעברית." },
-            { role: "user", content: prompt }
-          ]
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
-      if (data.choices && data.choices.length > 0) {
-        setAiInsight(data.choices[0].message.content);
+      const candidate = data.candidates?.[0];
+      
+      if (candidate && candidate.content?.parts?.[0]?.text) {
+        setAiInsight(candidate.content.parts[0].text);
       } else {
-        setAiInsight("לא התקבלה תשובה ברורה מהשרת.");
+        setAiInsight("סליחה, לא הצלחתי לנתח את הנתונים כרגע. המשך בעבודה המצוינת!");
       }
     } catch (error) {
-      console.error('Error fetching Groq insights:', error);
-      setAiInsight("אירעה שגיאה בתקשורת עם ה-AI. המשך בדרך הטובה!");
+      console.error('Error fetching Gemini insights:', error);
+      setAiInsight("אירעה שגיאה בתקשורת עם מאמן ה-AI. קח נשימה עמוקה וננסה שוב מאוחר יותר.");
     } finally {
       setIsAiLoading(false);
     }
@@ -219,35 +251,69 @@ export default function App() {
     const progress = habits.length > 0 ? (completedCount / habits.length) * 100 : 0;
 
     return (
-      <div className="space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 opacity-10 transform translate-x-4 -translate-y-4">
-            <Trophy size={120} />
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        
+        {/* Header Widget */}
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 opacity-10 transform translate-x-4 -translate-y-4 transition-transform group-hover:scale-110 duration-700">
+            <Target size={160} />
           </div>
-          <h2 className="text-2xl font-bold mb-2 relative z-10">היום שלך</h2>
-          <p className="text-blue-100 mb-4 relative z-10">השלמת {completedCount} מתוך {habits.length} הרגלים היום.</p>
           
-          <div className="w-full bg-blue-900/50 rounded-full h-4 mb-2 backdrop-blur-sm relative z-10">
-            <div 
-              className="bg-white rounded-full h-4 transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            ></div>
+          <div className="flex justify-between items-start relative z-10">
+            <div>
+              <h2 className="text-3xl font-bold mb-2">היום שלך</h2>
+              <p className="text-indigo-100 text-lg mb-6 flex items-center gap-2">
+                <Sparkles size={18} /> השלמת {completedCount} מתוך {habits.length} הרגלים.
+              </p>
+            </div>
+            <div className="hidden sm:flex flex-col items-center bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/20">
+              <span className="text-xs uppercase tracking-wider text-indigo-100 font-semibold mb-1">רמה {userStats.level}</span>
+              <div className="flex items-center gap-1 font-bold text-xl text-yellow-300">
+                <Star size={20} className="fill-current" />
+                {userStats.totalXP}
+              </div>
+            </div>
           </div>
-          <p className="text-right text-sm font-semibold opacity-90 relative z-10">{Math.round(progress)}% הושלם</p>
+          
+          <div className="w-full bg-black/20 rounded-full h-4 mb-2 backdrop-blur-sm relative z-10 overflow-hidden shadow-inner">
+            <div 
+              className="bg-gradient-to-r from-blue-300 to-white rounded-full h-4 transition-all duration-1000 ease-out relative"
+              style={{ width: `${progress}%` }}
+            >
+              <div className="absolute inset-0 bg-white/30 animate-pulse"></div>
+            </div>
+          </div>
+          <div className="flex justify-between text-sm font-medium relative z-10 opacity-90">
+             <span>התקדמות יומית</span>
+             <span>{Math.round(progress)}% הושלם</span>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <CalendarDays className="text-indigo-500" />
+        {/* Habits List */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 sm:p-8">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+              <CalendarDays className="text-indigo-500 bg-indigo-50 p-2 rounded-xl" size={40} />
               משימות להיום
             </h3>
-            <span className="text-sm text-gray-500">{formatDateToHebrew(today)}</span>
+            <span className="text-sm font-medium bg-slate-100 text-slate-600 py-1.5 px-4 rounded-full">{formatDateToHebrew(today)}</span>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-4">
             {habits.length === 0 ? (
-              <p className="text-center text-gray-500 py-6">אין לך הרגלים עדיין. עבור ללשונית ניהול כדי להוסיף.</p>
+              <div className="text-center py-12 px-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50">
+                <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-slate-300">
+                  <Plus size={32} />
+                </div>
+                <h4 className="text-lg font-bold text-slate-700 mb-2">הדרך שלך מתחילה כאן!</h4>
+                <p className="text-slate-500 mb-6 max-w-sm mx-auto">אין לך עדיין הרגלים מוגדרים להיום. הגיע הזמן לבנות את שגרת המנצחים שלך.</p>
+                <button 
+                  onClick={() => setActiveTab('manage')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-6 rounded-xl transition-colors shadow-md shadow-indigo-200"
+                >
+                  הוסף הרגל ראשון
+                </button>
+              </div>
             ) : (
               habits.map(habit => {
                 const isCompleted = !!habit.logs[today];
@@ -261,36 +327,36 @@ export default function App() {
                 return (
                   <div 
                     key={habit.id} 
-                    className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                      isCompleted ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-md'
+                    className={`flex items-center justify-between p-4 sm:p-5 rounded-2xl border-2 transition-all duration-300 group ${
+                      isCompleted ? 'bg-slate-50 border-slate-100 scale-[0.99] opacity-80' : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50'
                     }`}
                   >
-                    <div className="flex items-center gap-4 cursor-pointer flex-1" onClick={() => toggleHabit(habit.id, today)}>
-                      <button className={`transition-colors ${isCompleted ? 'text-green-500' : 'text-gray-300 hover:text-indigo-400'}`}>
-                        {isCompleted ? <CheckCircle size={28} /> : <Circle size={28} />}
+                    <div className="flex items-center gap-5 cursor-pointer flex-1" onClick={() => toggleHabit(habit.id, today)}>
+                      <button className={`transition-all duration-300 ${isCompleted ? 'text-green-500 scale-110' : 'text-slate-300 group-hover:text-indigo-400 group-hover:scale-110'}`}>
+                        {isCompleted ? <CheckCircle size={32} /> : <Circle size={32} />}
                       </button>
                       <div className="flex-1">
-                        <h4 className={`font-semibold text-lg flex items-center gap-2 ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                        <h4 className={`font-bold text-lg sm:text-xl flex items-center gap-2 transition-all ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
                           {habit.name}
-                          {isWeeklyGoalMet && <Trophy size={16} className="text-yellow-500" title="היעד השבועי הושג!" />}
+                          {isWeeklyGoalMet && <Trophy size={18} className="text-yellow-500 animate-bounce" title="היעד השבועי הושג!" />}
                         </h4>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${category?.color}`}>
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${category?.color}`}>
                             {category?.name}
                           </span>
                           
                           {freqType === 'daily' ? (
                             streak > 2 && (
-                              <span className="text-xs text-orange-500 flex items-center font-medium bg-orange-50 px-2 py-0.5 rounded-full">
-                                <Flame size={12} className="ml-1" />
-                                רצף של {streak} ימים!
+                              <span className="text-xs text-orange-600 flex items-center font-bold bg-orange-100 px-2.5 py-1 rounded-lg">
+                                <Flame size={14} className="ml-1" />
+                                {streak} ימים ברצף!
                               </span>
                             )
                           ) : (
-                            <span className={`text-xs flex items-center font-medium px-2 py-0.5 rounded-full ${
+                            <span className={`text-xs flex items-center font-bold px-2.5 py-1 rounded-lg ${
                               isWeeklyGoalMet ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-600 border border-blue-100'
                             }`}>
-                              {completionsThisWeek} מתוך {target} השבוע
+                              {completionsThisWeek}/{target} השבוע
                             </span>
                           )}
                         </div>
@@ -303,36 +369,43 @@ export default function App() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
-              <Sparkles className="text-purple-600" />
+        {/* AI Insight Widget */}
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl p-6 sm:p-8 border-2 border-indigo-100/50 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-32 h-32 bg-purple-200 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob"></div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-200 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob animation-delay-2000"></div>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 relative z-10 gap-4">
+            <h3 className="text-xl font-bold text-indigo-950 flex items-center gap-3">
+              <BrainCircuit className="text-purple-600 bg-purple-100 p-2 rounded-xl" size={40} />
               מאמן אישי AI
             </h3>
             <button 
               onClick={fetchAIInsight}
-              disabled={isAiLoading}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+              disabled={isAiLoading || habits.length === 0}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:hover:shadow-md flex items-center justify-center gap-2"
             >
               {isAiLoading ? (
                 <>
-                  <BrainCircuit className="animate-pulse" size={16} />
-                  מנתח נתונים...
+                  <Activity className="animate-spin" size={18} />
+                  מנתח את הדפוסים שלך...
                 </>
               ) : (
                 <>
-                  <BrainCircuit size={16} />
-                  קבל תובנה יומית
+                  <Sparkles size={18} />
+                  קבל תובנה חכמה
                 </>
               )}
             </button>
           </div>
           
-          <div className="bg-white rounded-xl p-5 shadow-inner min-h-[100px] flex items-center">
+          <div className={`bg-white/80 backdrop-blur-md rounded-2xl p-6 border border-white/50 shadow-inner min-h-[120px] flex items-center transition-all ${isAiLoading ? 'opacity-50' : 'opacity-100'} relative z-10`}>
             {aiInsight ? (
-              <p className="text-gray-700 leading-relaxed text-lg whitespace-pre-wrap">{aiInsight}</p>
+              <p className="text-slate-700 leading-relaxed text-lg font-medium">{aiInsight}</p>
             ) : (
-              <p className="text-gray-400 italic text-center w-full">לחץ על הכפתור כדי לקבל ניתוח חכם של ההרגלים שלך ותובנות להמשך...</p>
+              <div className="text-center w-full space-y-2">
+                <p className="text-slate-500 font-medium">לחיצה אחת והבינה המלאכותית שלנו תנתח את ההרגלים שלך</p>
+                <p className="text-slate-400 text-sm">מומלץ לבקש תובנה בסוף היום לסיכום ההתקדמות</p>
+              </div>
             )}
           </div>
         </div>
@@ -341,206 +414,273 @@ export default function App() {
   };
 
   const renderManage = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Plus className="text-indigo-500" />
-          הוספת הרגל חדש
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8">
+        <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+          <Plus className="text-indigo-500 bg-indigo-50 p-2 rounded-xl" size={40} />
+          יצירת הרגל חדש
         </h3>
         
-        <form onSubmit={addHabit} className="flex flex-col gap-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <input
-              type="text"
-              placeholder="איזה הרגל תרצה לאמץ? (למשל: ריצה, קריאה)"
-              value={newHabitName}
-              onChange={(e) => setNewHabitName(e.target.value)}
-              className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-              required
-            />
-            <select
-              value={newHabitCategory}
-              onChange={(e) => setNewHabitCategory(e.target.value)}
-              className="p-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 outline-none md:w-48"
-            >
-              {CATEGORIES.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+        <form onSubmit={addHabit} className="flex flex-col gap-6">
+          <div className="flex flex-col md:flex-row gap-5">
+            <div className="flex-1">
+               <label className="block text-sm font-semibold text-slate-600 mb-2">שם ההרגל</label>
+               <input
+                type="text"
+                placeholder="למשל: קריאת 10 עמודים ביום..."
+                value={newHabitName}
+                onChange={(e) => setNewHabitName(e.target.value)}
+                className="w-full p-3.5 border-2 border-slate-200 rounded-xl focus:ring-0 focus:border-indigo-500 transition-colors outline-none text-slate-700 font-medium bg-slate-50 focus:bg-white"
+                required
+              />
+            </div>
+            <div className="md:w-64">
+               <label className="block text-sm font-semibold text-slate-600 mb-2">קטגוריה</label>
+               <select
+                value={newHabitCategory}
+                onChange={(e) => setNewHabitCategory(e.target.value)}
+                className="w-full p-3.5 border-2 border-slate-200 rounded-xl focus:ring-0 focus:border-indigo-500 transition-colors outline-none text-slate-700 font-medium bg-slate-50 focus:bg-white cursor-pointer"
+               >
+                {CATEGORIES.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
-            <span className="text-gray-700 font-medium">תדירות:</span>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="radio" 
-                  name="frequency" 
-                  value="daily" 
-                  checked={newHabitFreqType === 'daily'} 
-                  onChange={() => setNewHabitFreqType('daily')}
-                  className="w-4 h-4 text-indigo-600"
-                />
-                <span>כל יום</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="radio" 
-                  name="frequency" 
-                  value="weekly" 
-                  checked={newHabitFreqType === 'weekly'} 
-                  onChange={() => setNewHabitFreqType('weekly')}
-                  className="w-4 h-4 text-indigo-600"
-                />
-                <span>ימים בשבוע</span>
-              </label>
-            </div>
-            
-            {newHabitFreqType === 'weekly' && (
-              <div className="flex items-center gap-2 md:mr-4">
-                <input 
-                  type="number" 
-                  min="1" 
-                  max="7" 
-                  value={newHabitFreqTarget}
-                  onChange={(e) => setNewHabitFreqTarget(e.target.value)}
-                  className="w-16 p-2 border border-gray-300 rounded-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-                <span className="text-gray-600 text-sm">פעמים בשבוע</span>
+          <div>
+            <label className="block text-sm font-semibold text-slate-600 mb-2">תדירות היעד</label>
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-slate-50 p-5 rounded-2xl border-2 border-slate-100">
+              <div className="flex gap-6 w-full md:w-auto">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${newHabitFreqType === 'daily' ? 'border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                     {newHabitFreqType === 'daily' && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full" />}
+                  </div>
+                  <input type="radio" className="hidden" checked={newHabitFreqType === 'daily'} onChange={() => setNewHabitFreqType('daily')} />
+                  <span className={`font-medium ${newHabitFreqType === 'daily' ? 'text-indigo-900' : 'text-slate-600'}`}>כל יום</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${newHabitFreqType === 'weekly' ? 'border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                     {newHabitFreqType === 'weekly' && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full" />}
+                  </div>
+                  <input type="radio" className="hidden" checked={newHabitFreqType === 'weekly'} onChange={() => setNewHabitFreqType('weekly')} />
+                  <span className={`font-medium ${newHabitFreqType === 'weekly' ? 'text-indigo-900' : 'text-slate-600'}`}>מספר ימים בשבוע</span>
+                </label>
               </div>
-            )}
+              
+              {newHabitFreqType === 'weekly' && (
+                <div className="flex items-center gap-3 md:mr-6 bg-white p-2 rounded-xl border border-slate-200 shadow-sm w-full md:w-auto mt-4 md:mt-0 justify-center">
+                  <span className="text-slate-600 font-medium">יעד:</span>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="7" 
+                    value={newHabitFreqTarget}
+                    onChange={(e) => setNewHabitFreqTarget(e.target.value)}
+                    className="w-16 p-1.5 border-2 border-indigo-100 rounded-lg text-center font-bold text-indigo-700 focus:border-indigo-500 outline-none bg-indigo-50"
+                  />
+                  <span className="text-slate-600 text-sm">פעמים בשבוע</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <button 
             type="submit"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-md hover:shadow-lg mt-2"
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl mt-2 flex items-center justify-center gap-2"
           >
-            הוסף הרגל
+            <Plus size={20} />
+            שמור הרגל
           </button>
         </form>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Settings className="text-indigo-500" />
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8">
+        <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+          <Settings className="text-indigo-500 bg-indigo-50 p-2 rounded-xl" size={40} />
           ניהול הרגלים קיימים
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {habits.map(habit => {
-            const category = CATEGORIES.find(c => c.id === habit.category);
-            const freqType = habit.frequency?.type || (typeof habit.frequency === 'string' ? habit.frequency : 'daily');
-            const target = habit.frequency?.target || 7;
-            
-            return (
-              <div key={habit.id} className="p-4 border border-gray-200 rounded-xl flex justify-between items-center hover:shadow-md transition-shadow">
-                <div>
-                  <h4 className="font-bold text-gray-800">{habit.name}</h4>
-                  <div className="flex gap-2 mt-2">
-                     <span className={`text-xs px-2 py-0.5 rounded-full border ${category?.color}`}>
-                      {category?.name}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-600 border-gray-200">
-                      {freqType === 'daily' ? 'כל יום' : `${target} פעמים בשבוע`}
-                    </span>
+        
+        {habits.length === 0 ? (
+           <p className="text-slate-500 text-center py-6">אין הרגלים לנהל כרגע.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {habits.map(habit => {
+              const category = CATEGORIES.find(c => c.id === habit.category);
+              const freqType = habit.frequency?.type || (typeof habit.frequency === 'string' ? habit.frequency : 'daily');
+              const target = habit.frequency?.target || 7;
+              
+              return (
+                <div key={habit.id} className="p-5 border-2 border-slate-100 rounded-2xl flex justify-between items-center hover:border-slate-200 transition-colors bg-slate-50/50">
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-lg">{habit.name}</h4>
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                       <span className={`text-xs font-semibold px-2 py-1 rounded-lg border ${category?.color}`}>
+                        {category?.name}
+                      </span>
+                      <span className="text-xs font-semibold px-2 py-1 rounded-lg border bg-white text-slate-600 border-slate-200 flex items-center gap-1">
+                        <Target size={12} />
+                        {freqType === 'daily' ? 'כל יום' : `${target} פעמים בשבוע`}
+                      </span>
+                    </div>
                   </div>
+                  <button 
+                    onClick={() => deleteHabit(habit.id)}
+                    className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-3 rounded-xl transition-colors"
+                    title="מחק הרגל"
+                  >
+                    <Trash2 size={22} />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => deleteHabit(habit.id)}
-                  className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                  title="מחק הרגל"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 
   const renderAnalytics = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Activity className="text-indigo-500" />
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Gamification Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-5 rounded-2xl border border-yellow-100 text-center">
+          <Star className="text-yellow-500 mx-auto mb-2" size={28} />
+          <h4 className="text-sm font-semibold text-yellow-800 mb-1">סך הכל XP</h4>
+          <span className="text-2xl font-bold text-yellow-600">{userStats.totalXP}</span>
+        </div>
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-100 text-center">
+           <Trophy className="text-indigo-500 mx-auto mb-2" size={28} />
+           <h4 className="text-sm font-semibold text-indigo-800 mb-1">רמה נוכחית</h4>
+           <span className="text-2xl font-bold text-indigo-600">{userStats.level}</span>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-2xl border border-green-100 text-center">
+           <Target className="text-green-500 mx-auto mb-2" size={28} />
+           <h4 className="text-sm font-semibold text-green-800 mb-1">הרגלים פעילים</h4>
+           <span className="text-2xl font-bold text-green-600">{habits.length}</span>
+        </div>
+        <div className="bg-gradient-to-br from-orange-50 to-red-50 p-5 rounded-2xl border border-orange-100 text-center">
+           <Flame className="text-orange-500 mx-auto mb-2" size={28} />
+           <h4 className="text-sm font-semibold text-orange-800 mb-1">שיא רצף</h4>
+           <span className="text-2xl font-bold text-orange-600">
+              {habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h.logs))) : 0}
+           </span>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8">
+        <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+          <Activity className="text-indigo-500 bg-indigo-50 p-2 rounded-xl" size={40} />
           מגמות (7 ימים אחרונים)
         </h3>
         <div className="h-80 w-full" dir="ltr">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={statsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12}} domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
+            <AreaChart data={statsData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 13, fontWeight: 500}} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 13}} domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
               <Tooltip 
-                cursor={{fill: '#f9fafb'}}
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                formatter={(value) => [`${value}% הושלמו`, 'ביצועים']}
+                cursor={{stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '4 4'}}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                formatter={(value) => [`${value}% הושלמו`, 'אחוזי הצלחה']}
                 labelFormatter={(label) => `תאריך: ${label}`}
               />
-              <Bar dataKey="rate" fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={50} />
-            </BarChart>
+              <Area type="monotone" dataKey="rate" stroke="#6366f1" strokeWidth={4} fillOpacity={1} fill="url(#colorRate)" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h4 className="font-bold text-gray-700 mb-4">סיכום סטטיסטי</h4>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-600">סה"כ הרגלים פעילים:</span>
-                <span className="text-xl font-bold text-indigo-600">{habits.length}</span>
+      
+      {/* Gamification Progress Widget */}
+      <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-screen filter blur-[80px] opacity-30"></div>
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+           <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
+                 <Zap className="text-yellow-400" size={32} />
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-600">רצף נוכחי מקסימלי:</span>
-                <span className="text-xl font-bold text-orange-500 flex items-center">
-                  {Math.max(0, ...habits.map(h => calculateStreak(h.logs)))} 
-                  <Flame size={18} className="mr-1" />
-                </span>
+              <div>
+                 <h4 className="font-bold text-xl mb-1">הדרך לרמה {userStats.level + 1}</h4>
+                 <p className="text-slate-400 text-sm">חסרים לך עוד {Math.round(userStats.xpRequired - userStats.xpProgress)} נקודות ניסיון לעלות רמה.</p>
               </div>
-            </div>
-         </div>
-         
-         <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-6 flex flex-col justify-center items-center text-center">
-            <BrainCircuit size={48} className="text-indigo-400 mb-4" />
-            <h4 className="font-bold text-indigo-900 mb-2">מוכנים לשלב הבא?</h4>
-            <p className="text-indigo-700 text-sm">התמדה היא המפתח. עקוב אחרי הגרף היומי כדי לראות את ההתקדמות שלך ולשבור שיאים אישיים.</p>
-         </div>
+           </div>
+           
+           <div className="w-full md:w-1/2">
+             <div className="flex justify-between text-sm font-medium text-slate-300 mb-2">
+                <span>רמה {userStats.level}</span>
+                <span>רמה {userStats.level + 1}</span>
+             </div>
+             <div className="w-full bg-slate-800 rounded-full h-3 border border-slate-700 overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-yellow-500 to-yellow-300 h-full rounded-full transition-all duration-1000"
+                  style={{ width: `${userStats.percentToNext}%` }}
+                ></div>
+             </div>
+           </div>
+        </div>
       </div>
     </div>
   );
 
-  if (!isLoaded) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div></div>;
+  if (!isLoaded) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+      <div className="animate-spin rounded-full h-14 w-14 border-4 border-slate-200 border-t-indigo-600"></div>
+      <p className="text-slate-500 font-medium animate-pulse">טוען את המידע שלך...</p>
+    </div>
+  );
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 md:pb-0">
-      <div className="max-w-5xl mx-auto flex flex-col md:flex-row min-h-screen">
+    <div dir="rtl" className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24 md:pb-0">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row min-h-screen">
         
-        {/* Sidebar / Bottom Nav (Mobile) */}
-        <nav className="fixed bottom-0 w-full md:w-64 md:relative bg-white border-t md:border-t-0 md:border-l border-gray-200 z-50">
-          <div className="flex md:flex-col justify-around md:justify-start h-16 md:h-screen md:p-6 md:sticky top-0">
-            <div className="hidden md:flex items-center gap-3 mb-10 text-indigo-600 font-bold text-2xl">
-              <BrainCircuit size={32} />
-              <span>HabitAI</span>
+        {/* Sidebar / Bottom Nav (Mobile & Desktop) */}
+        <nav className="fixed bottom-0 w-full md:w-72 md:relative bg-white border-t md:border-t-0 md:border-l border-slate-200 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:shadow-none">
+          <div className="flex md:flex-col justify-around md:justify-start h-20 md:h-screen md:p-6 md:sticky top-0">
+            
+            {/* Desktop Brand & Profile */}
+            <div className="hidden md:block mb-10">
+              <div className="flex items-center gap-3 text-indigo-600 font-black text-3xl mb-8">
+                <BrainCircuit size={36} />
+                <span>HabitAI</span>
+              </div>
+              
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xl">
+                  {userStats.level}
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800">פרופיל אישי</div>
+                  <div className="text-xs text-slate-500 flex items-center gap-1 font-medium">
+                    <Star size={12} className="text-yellow-500 fill-current" />
+                    {userStats.totalXP} XP
+                  </div>
+                </div>
+              </div>
             </div>
             
-            <div className="flex md:flex-col w-full">
+            <div className="flex md:flex-col w-full h-full md:h-auto items-center md:items-stretch gap-1 md:gap-3 px-2 md:px-0">
               {[
-                { id: 'dashboard', label: 'היום שלי', icon: LayoutDashboard },
+                { id: 'dashboard', label: 'לוח בקרה', icon: LayoutDashboard },
                 { id: 'manage', label: 'ניהול הרגלים', icon: Settings },
                 { id: 'analytics', label: 'התקדמות', icon: Activity },
               ].map(item => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex-1 md:flex-none flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-4 rounded-xl transition-all font-medium text-xs md:text-base ${
+                  className={`flex-1 md:flex-none flex flex-col md:flex-row items-center justify-center md:justify-start gap-1.5 md:gap-4 p-2 md:p-4 rounded-2xl transition-all duration-300 font-semibold text-[10px] sm:text-xs md:text-base ${
                     activeTab === item.id 
-                      ? 'text-indigo-600 md:bg-indigo-50' 
-                      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                      ? 'text-indigo-700 bg-indigo-50/80 border md:border-transparent border-indigo-100' 
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 border border-transparent'
                   }`}
                 >
-                  <item.icon size={22} className={activeTab === item.id ? "text-indigo-600" : ""} />
+                  <item.icon size={24} className={`${activeTab === item.id ? "text-indigo-600" : "text-slate-400"} transition-colors`} />
                   <span>{item.label}</span>
                 </button>
               ))}
@@ -549,13 +689,19 @@ export default function App() {
         </nav>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 md:p-8">
-          <header className="mb-8 md:hidden flex items-center gap-2 text-indigo-600 font-bold text-2xl">
-             <BrainCircuit size={28} />
-             <span>HabitAI</span>
+        <main className="flex-1 p-4 md:p-8 lg:p-10">
+          <header className="mb-6 md:hidden flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+             <div className="flex items-center gap-2 text-indigo-600 font-black text-2xl">
+               <BrainCircuit size={28} />
+               <span>HabitAI</span>
+             </div>
+             <div className="flex items-center gap-1 font-bold text-sm bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-slate-700">
+               <Star size={16} className="text-yellow-500 fill-current" />
+               {userStats.level}
+             </div>
           </header>
 
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             {activeTab === 'dashboard' && renderDashboard()}
             {activeTab === 'manage' && renderManage()}
             {activeTab === 'analytics' && renderAnalytics()}
