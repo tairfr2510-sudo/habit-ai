@@ -250,6 +250,60 @@ export default function App() {
     const completedCount = habits.filter(h => h.logs[today]).length;
     const progress = habits.length > 0 ? (completedCount / habits.length) * 100 : 0;
 
+    const dailyHabits = habits.filter(h => (h.frequency?.type || h.frequency) === 'daily');
+    const weeklyHabits = habits.filter(h => (h.frequency?.type || h.frequency) === 'weekly');
+
+    const renderHabitCard = (habit) => {
+      const isCompleted = !!habit.logs[today];
+      const category = CATEGORIES.find(c => c.id === habit.category);
+      const freqType = habit.frequency?.type || (typeof habit.frequency === 'string' ? habit.frequency : 'daily');
+      const target = habit.frequency?.target || 7;
+      const completionsThisWeek = getCompletionsThisWeek(habit.logs);
+      const streak = calculateStreak(habit.logs);
+      const isWeeklyGoalMet = freqType === 'weekly' && completionsThisWeek >= target;
+      
+      return (
+        <div 
+          key={habit.id} 
+          className={`flex items-center justify-between p-4 sm:p-5 rounded-2xl border-2 transition-all duration-300 group ${
+            isCompleted ? 'bg-slate-50 border-slate-100 scale-[0.99] opacity-80' : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50'
+          }`}
+        >
+          <div className="flex items-center gap-5 cursor-pointer flex-1" onClick={() => toggleHabit(habit.id, today)}>
+            <button className={`transition-all duration-300 ${isCompleted ? 'text-green-500 scale-110' : 'text-slate-300 group-hover:text-indigo-400 group-hover:scale-110'}`}>
+              {isCompleted ? <CheckCircle size={32} /> : <Circle size={32} />}
+            </button>
+            <div className="flex-1">
+              <h4 className={`font-bold text-lg sm:text-xl flex items-center gap-2 transition-all ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                {habit.name}
+                {isWeeklyGoalMet && <Trophy size={18} className="text-yellow-500 animate-bounce" title="היעד השבועי הושג!" />}
+              </h4>
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${category?.color}`}>
+                  {category?.name}
+                </span>
+                
+                {freqType === 'daily' ? (
+                  streak > 2 && (
+                    <span className="text-xs text-orange-600 flex items-center font-bold bg-orange-100 px-2.5 py-1 rounded-lg">
+                      <Flame size={14} className="ml-1" />
+                      {streak} ימים ברצף!
+                    </span>
+                  )
+                ) : (
+                  <span className={`text-xs flex items-center font-bold px-2.5 py-1 rounded-lg ${
+                    isWeeklyGoalMet ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                  }`}>
+                    {completionsThisWeek}/{target} השבוע
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
@@ -315,56 +369,25 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              habits.map(habit => {
-                const isCompleted = !!habit.logs[today];
-                const category = CATEGORIES.find(c => c.id === habit.category);
-                const freqType = habit.frequency?.type || (typeof habit.frequency === 'string' ? habit.frequency : 'daily');
-                const target = habit.frequency?.target || 7;
-                const completionsThisWeek = getCompletionsThisWeek(habit.logs);
-                const streak = calculateStreak(habit.logs);
-                const isWeeklyGoalMet = freqType === 'weekly' && completionsThisWeek >= target;
-                
-                return (
-                  <div 
-                    key={habit.id} 
-                    className={`flex items-center justify-between p-4 sm:p-5 rounded-2xl border-2 transition-all duration-300 group ${
-                      isCompleted ? 'bg-slate-50 border-slate-100 scale-[0.99] opacity-80' : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-5 cursor-pointer flex-1" onClick={() => toggleHabit(habit.id, today)}>
-                      <button className={`transition-all duration-300 ${isCompleted ? 'text-green-500 scale-110' : 'text-slate-300 group-hover:text-indigo-400 group-hover:scale-110'}`}>
-                        {isCompleted ? <CheckCircle size={32} /> : <Circle size={32} />}
-                      </button>
-                      <div className="flex-1">
-                        <h4 className={`font-bold text-lg sm:text-xl flex items-center gap-2 transition-all ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-                          {habit.name}
-                          {isWeeklyGoalMet && <Trophy size={18} className="text-yellow-500 animate-bounce" title="היעד השבועי הושג!" />}
-                        </h4>
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
-                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${category?.color}`}>
-                            {category?.name}
-                          </span>
-                          
-                          {freqType === 'daily' ? (
-                            streak > 2 && (
-                              <span className="text-xs text-orange-600 flex items-center font-bold bg-orange-100 px-2.5 py-1 rounded-lg">
-                                <Flame size={14} className="ml-1" />
-                                {streak} ימים ברצף!
-                              </span>
-                            )
-                          ) : (
-                            <span className={`text-xs flex items-center font-bold px-2.5 py-1 rounded-lg ${
-                              isWeeklyGoalMet ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-600 border border-blue-100'
-                            }`}>
-                              {completionsThisWeek}/{target} השבוע
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+              <div className="space-y-8">
+                {dailyHabits.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-bold text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-3">
+                      <Target className="text-indigo-500" size={24} /> יעדים יומיים
+                    </h4>
+                    {dailyHabits.map(renderHabitCard)}
                   </div>
-                );
-              })
+                )}
+                
+                {weeklyHabits.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-bold text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-3 mt-4">
+                      <CalendarDays className="text-indigo-500" size={24} /> יעדים שבועיים
+                    </h4>
+                    {weeklyHabits.map(renderHabitCard)}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
