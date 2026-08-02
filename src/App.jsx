@@ -5,7 +5,6 @@ import {
   requestNativeNotificationPermission,
   scheduleNativeDailyReminder
 } from './lib/nativeReminders';
-import { getApiBaseUrl } from './lib/apiBase';
 import { INITIAL_HABITS } from './constants';
 import {
   getTodayStr,
@@ -431,26 +430,46 @@ export default function App() {
     return badges;
   }, [habits, userStats]);
 
-  // הקריאה ל-AI עוברת דרך Netlify Function (netlify/functions/ai-insight.js) כדי שמפתח
-  // ה-API יישאר בצד שרת בלבד ולא ייחשף בדפדפן. בפיתוח מקומי יש להריץ `netlify dev` (ולא `vite`)
-  // כדי שהנתיב /api/ai-insight יעבוד. באפליקציה הנייטיבית (Capacitor) אין שרת מקומי, לכן
-  // הבקשה הולכת לכתובת המלאה של האתר ב-Netlify (ראו lib/apiBase.js).
+  // קריאה ישירה ל-Gemini מהצד לקוח, עם מפתח שנקרא מ-VITE_GEMINI_API_KEY (מוגדר ב-.env.local).
+  // המפתח נצרב בתוך חבילת ה-JS (כולל בתוך ה-APK), ולכן חשוף עקרונית למי שיפרק את האפליקציה.
+  // זו החלטה מודעת בשביל אפליקציה אישית שלא מתפרסמת - אם בעתיד תרצו לפרסם אותה (חנות אפליקציות
+  // או אתר ציבורי), עדיף לחזור לגישה עם שרת ביניים (כמו netlify/functions בהיסטוריית הקוד).
   const fetchAIInsight = async () => {
     setIsAiLoading(true);
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      setAiInsight("לא נמצא מפתח API. ודא שהגדרת VITE_GEMINI_API_KEY בקובץ .env.local ובנית מחדש את הפרויקט.");
+      setIsAiLoading(false);
+      return;
+    }
+
+    const prompt = `
+      אני מנהל מעקב אחרי ההרגלים שלי ב-HabitAI. נתונים ב-JSON: ${JSON.stringify(habits)}.
+      1. תן לי חיזוק חיובי קצרצר.
+      2. זהה אזורים בהם אני מתקשה והצע אסטרטגיה אחת מעשית.
+      ענה בפסקה זורמת אחת בעברית חמה ומעודדת, ללא רשימות.
+    `;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/ai-insight`, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ habits })
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: "אתה מאמן אישי ידידותי בעברית." }] }
+        })
       });
       const data = await response.json();
-      if (response.ok && data.text) {
-        setAiInsight(data.text);
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        setAiInsight(text);
       } else {
-        setAiInsight(data.error || "סליחה, לא הצלחתי לנתח כרגע. נסה שוב מאוחר יותר.");
+        setAiInsight("סליחה, לא הצלחתי לנתח כרגע. נסה שוב מאוחר יותר.");
       }
     } catch (error) {
-      setAiInsight("שגיאה בתקשורת עם מאמן ה-AI. ודא שאתה מריץ את הפרויקט עם netlify dev (לא vite dev) לבדיקה מקומית.");
+      setAiInsight("שגיאה בתקשורת עם מאמן ה-AI.");
     } finally {
       setIsAiLoading(false);
     }
