@@ -177,31 +177,6 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const showBrowserNotification = (title, body) => {
-    if (!('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
-
-    const notificationOptions = {
-      body,
-      icon: '/favicon.svg',
-      tag: title,
-      renotify: true
-    };
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready
-        .then((registration) => {
-          registration.showNotification(title, notificationOptions);
-        })
-        .catch(() => {
-          new Notification(title, notificationOptions);
-        });
-      return;
-    }
-
-    new Notification(title, notificationOptions);
-  };
-
   // מערכת בדיקת תזכורות אוטומטית (פועלת כל דקה)
   useEffect(() => {
     if (!browserNotifyEnabled || !("Notification" in window)) return;
@@ -223,9 +198,9 @@ export default function App() {
 
         if (uncompletedHabits.length > 0) {
           const names = uncompletedHabits.map(h => h.name).join(', ');
-          showBrowserNotification("זמן להתעורר! משימות מחכות לך ⏳", `הרגלים שנשארו להיום: ${names}`);
+          new Notification("זמן להתעורר! משימות מחכות לך ⏳", { body: `הרגלים שנשארו להיום: ${names}`, icon: "🔔" });
         } else if (habits.filter(h => h.frequency?.type === 'daily').length > 0) {
-          showBrowserNotification("הכל הושלם! 🌟", 'כל הכבוד! סיימת את כל המשימות היומיות שלך להיום.');
+          new Notification("הכל הושלם! 🌟", { body: "כל הכבוד! סיימת את כל המשימות היומיות שלך להיום.", icon: "🏆" });
         }
         setLastReminderDate(todayStr); // מסמנים שהתרענו להיום
       }
@@ -241,7 +216,7 @@ export default function App() {
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       setBrowserNotifyEnabled(true);
-      showBrowserNotification("HabitAI", 'מעולה! התראות הופעלו בהצלחה.');
+      new Notification("HabitAI", { body: "מעולה! התראות הופעלו בהצלחה.", icon: "🧠" });
       showToast("התראות הופעלו בהצלחה!");
     }
   };
