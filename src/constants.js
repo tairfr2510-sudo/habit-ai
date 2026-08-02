@@ -10,3 +10,11 @@ export const INITIAL_HABITS = [
   { id: '2', name: 'מדיטציה 10 דקות', category: 'mind', frequency: { type: 'daily' }, logs: {}, notes: {}, createdAt: new Date().toISOString() },
   { id: '3', name: 'אימון כוח', category: 'health', frequency: { type: 'weekly', target: 3 }, logs: {}, notes: {}, createdAt: new Date().toISOString() },
 ];
+
+export const MOODS = [
+  { emoji: '🤩', label: 'מעולה' },
+  { emoji: '🙂', label: 'טוב' },
+  { emoji: '😐', label: 'רגיל' },
+  { emoji: '😔', label: 'קשה' },
+  { emoji: '😫', label: 'ממש קשה' }
+];

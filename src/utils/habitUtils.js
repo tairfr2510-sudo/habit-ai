@@ -31,6 +31,14 @@ export const getCompletionsThisWeek = (logs) => {
   return count;
 };
 
+// אחוז ההרגלים שהושלמו בתאריך נתון (מתוך כלל ההרגלים, יומיים ושבועיים כאחד) -
+// משמש לציר הזמן ביומן היומי, כדי להציג לצד כל רשומה כמה הושלם באותו יום.
+export const getCompletionRateForDate = (habits, dateStr) => {
+  if (!habits || habits.length === 0) return 0;
+  const completed = habits.filter(h => h.logs && h.logs[dateStr]).length;
+  return Math.round((completed / habits.length) * 100);
+};
+
 export const calculateStreak = (habitLogs) => {
   let streak = 0;
   const today = new Date();

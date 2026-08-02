@@ -1,7 +1,8 @@
-import { BrainCircuit, Star, LayoutDashboard, Settings, Activity, Moon, Sun } from 'lucide-react';
+import { BrainCircuit, Star, LayoutDashboard, Settings, Activity, NotebookPen, Moon, Sun } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'לוח בקרה', icon: LayoutDashboard },
+  { id: 'journal', label: 'יומן יומי', icon: NotebookPen },
   { id: 'manage', label: 'ניהול הרגלים', icon: Settings },
   { id: 'analytics', label: 'התקדמות', icon: Activity },
 ];

@@ -22,6 +22,7 @@ import DesktopHeader from './components/DesktopHeader';
 import Dashboard from './components/Dashboard';
 import ManageHabits from './components/ManageHabits';
 import Analytics from './components/Analytics';
+import DailyJournal from './components/DailyJournal';
 
 export default function App() {
   const [habits, setHabits] = useState([]);
@@ -58,6 +59,9 @@ export default function App() {
   const [draggingIndex, setDraggingIndex] = useState(null);
   const dragHabitIndexRef = useRef(null);
 
+  // יומן יומי ומעקב מצב רוח
+  const [journalEntries, setJournalEntries] = useState({}); // { [dateStr]: { mood, text, updatedAt } }
+
   useEffect(() => {
     const savedHabits = localStorage.getItem('habitTracker_data_v3');
     if (savedHabits) {
@@ -90,6 +94,15 @@ export default function App() {
       }
     }
 
+    const savedJournal = localStorage.getItem('habitTracker_journal_v1');
+    if (savedJournal) {
+      try {
+        setJournalEntries(JSON.parse(savedJournal));
+      } catch (e) {
+        console.warn('לא ניתן לטעון את היומן היומי.', e);
+      }
+    }
+
     setIsLoaded(true);
   }, []);
 
@@ -115,6 +128,12 @@ export default function App() {
       localStorage.setItem('habitTracker_notifications_v1', JSON.stringify(notifications));
     }
   }, [notifications, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('habitTracker_journal_v1', JSON.stringify(journalEntries));
+    }
+  }, [journalEntries, isLoaded]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -360,8 +379,16 @@ export default function App() {
     showToast("ההערה נשמרה ביומן.");
   };
 
+  const saveJournalEntry = (dateStr, mood, text) => {
+    setJournalEntries(prev => ({
+      ...prev,
+      [dateStr]: { mood, text, updatedAt: new Date().toISOString() }
+    }));
+    showToast("הרשומה נשמרה ביומן היומי!");
+  };
+
   const handleExportData = () => {
-    const dataStr = JSON.stringify(habits, null, 2);
+    const dataStr = JSON.stringify({ habits, journalEntries }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const exportFileDefaultName = `habitAI_backup_${getTodayStr()}.json`;
     const linkElement = document.createElement('a');
@@ -379,7 +406,12 @@ export default function App() {
       try {
         const importedData = JSON.parse(event.target.result);
         if (Array.isArray(importedData)) {
+          // פורמט גיבוי ישן - הרגלים בלבד, בלי יומן
           setHabits(importedData);
+          showToast("הנתונים שוחזרו בהצלחה!");
+        } else if (importedData && Array.isArray(importedData.habits)) {
+          setHabits(importedData.habits);
+          setJournalEntries(importedData.journalEntries || {});
           showToast("הנתונים שוחזרו בהצלחה!");
         } else {
           showToast("קובץ הגיבוי אינו תקין.");
@@ -530,6 +562,13 @@ export default function App() {
                   setActiveTab={setActiveTab}
                   onToggleHabit={toggleHabit}
                   onOpenNote={setActiveNoteModal}
+                />
+              )}
+              {activeTab === 'journal' && (
+                <DailyJournal
+                  habits={habits}
+                  journalEntries={journalEntries}
+                  saveJournalEntry={saveJournalEntry}
                 />
               )}
               {activeTab === 'manage' && (
