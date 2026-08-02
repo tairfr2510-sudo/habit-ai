@@ -35,9 +35,47 @@ npm install
 npm run dev
 ```
 
+הרצה כזו מספיקה לכל הפיצ'רים חוץ מתובנות ה-AI (שדורשות את Netlify Functions - ראו למטה).
+
 ## איך להפעיל תובנות AI
 
-כדי להפעיל את התובנות מה-AI, יש להוסיף מפתח API של Groq בקוד של האפליקציה.
+הקריאה ל-Gemini עוברת דרך Netlify Function (`netlify/functions/ai-insight.js`) כדי שמפתח ה-API
+יישאר בצד שרת בלבד ולעולם לא ייחשף בדפדפן.
+
+**פיתוח מקומי:**
+1. ודאו שיש קובץ `.env` בשורש הפרויקט עם `GEMINI_API_KEY=<המפתח שלכם>` (לא מחויב ב-git).
+2. הריצו `npm run dev:netlify` (מריץ `netlify dev`, שמפעיל גם את ה-Function וגם את Vite ביחד) - **לא** `npm run dev` הרגיל, כי בו אין הפונקציה של Netlify ותובנות ה-AI לא יעבדו.
+
+**פריסה (deploy) ל-Netlify:**
+1. חברו את הריפו ב-Netlify (Import from GitHub).
+2. הגדירו משתנה סביבה בשם `GEMINI_API_KEY` בהגדרות ה-Site (Site settings → Environment variables) - **לא** `VITE_GEMINI_API_KEY`, כי משתנים עם קידומת `VITE_` נחשפים לדפדפן.
+3. Netlify יזהה אוטומטית את `netlify.toml` (build command, publish dir, functions dir).
+
+## הפעלת אפליקציה + התראות אמיתיות בטלפון (Capacitor)
+
+התזכורות שרצות בדפדפן (`setInterval` בתוך React) פועלות רק כשהטאב פתוח - ברגע שנועלים
+את הטלפון או סוגרים את הדפדפן הן מפסיקות. כדי לקבל התראה אמיתית גם כשהאפליקציה סגורה,
+הפרויקט עטוף עם [Capacitor](https://capacitorjs.com) ומתזמן תזכורת יומית ישירות במערכת
+ההפעלה של הטלפון (`@capacitor/local-notifications`), בקובץ `src/lib/nativeReminders.js`.
+
+תיקיית `android/` כבר נוצרה ומוכנה בריפו. כדי לבנות ולהתקין על טלפון:
+
+1. דרישות: [Android Studio](https://developer.android.com/studio) מותקן (כולל JDK 17 ו-Android SDK - Android Studio מציע להתקין אותם אוטומטית בהתקנה הראשונה).
+2. בנו את גרסת הווב העדכנית וסנכרנו אותה לפרויקט האנדרואיד:
+   ```bash
+   npm run build
+   npm run cap:sync
+   ```
+3. פתחו את הפרויקט ב-Android Studio:
+   ```bash
+   npm run cap:open:android
+   ```
+4. בתוך Android Studio: חברו טלפון פיזי (עם USB debugging מופעל) או פתחו אמולטור, ולחצו Run ▶️.
+5. באפליקציה, לחצו "הפעל התראות" במסך "ניהול הרגלים" - זה יבקש הרשאת התראות מהמערכת
+   ויתזמן תזכורת יומית חוזרת בשעה שנבחרה. שינוי השעה בהגדרות מעדכן אוטומטית את התזמון.
+
+**חשוב:** כל פעם שמשנים קוד ורוצים לראות את זה באפליקציה המותקנת, צריך לחזור על שלב 2
+(`npm run build && npm run cap:sync`) ואז להריץ שוב מ-Android Studio.
 
 ## מטרת הפרויקט
 
