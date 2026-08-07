@@ -23,6 +23,7 @@ import Dashboard from './components/Dashboard';
 import ManageHabits from './components/ManageHabits';
 import Analytics from './components/Analytics';
 import DailyJournal from './components/DailyJournal';
+import WaterTracker from './components/WaterTracker';
 
 export default function App() {
   const [habits, setHabits] = useState([]);
@@ -61,6 +62,7 @@ export default function App() {
 
   // יומן יומי ומעקב מצב רוח
   const [journalEntries, setJournalEntries] = useState({}); // { [dateStr]: { mood, text, updatedAt } }
+  const [waterStats, setWaterStats] = useState({ goal: 2500, entries: {} });
 
   useEffect(() => {
     const savedHabits = localStorage.getItem('habitTracker_data_v3');
@@ -103,6 +105,19 @@ export default function App() {
       }
     }
 
+    const savedWater = localStorage.getItem('habitTracker_water_v1');
+    if (savedWater) {
+      try {
+        const parsedWater = JSON.parse(savedWater);
+        setWaterStats({
+          goal: parsedWater.goal || 2500,
+          entries: parsedWater.entries || {}
+        });
+      } catch (e) {
+        console.warn('לא ניתן לטעון את נתוני המים.', e);
+      }
+    }
+
     setIsLoaded(true);
   }, []);
 
@@ -134,6 +149,12 @@ export default function App() {
       localStorage.setItem('habitTracker_journal_v1', JSON.stringify(journalEntries));
     }
   }, [journalEntries, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('habitTracker_water_v1', JSON.stringify(waterStats));
+    }
+  }, [waterStats, isLoaded]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -387,8 +408,35 @@ export default function App() {
     showToast("הרשומה נשמרה ביומן היומי!");
   };
 
+  const addWaterIntake = (amount) => {
+    const today = getTodayStr();
+    const entry = { id: `${Date.now()}_${Math.round(Math.random() * 1000)}`, amount, time: new Date().toISOString() };
+    setWaterStats(prev => ({
+      ...prev,
+      entries: {
+        ...prev.entries,
+        [today]: [...(prev.entries?.[today] || []), entry]
+      }
+    }));
+    showToast(`נוסף ${amount} מ"ל למעקב המים.`);
+  };
+
+  const removeWaterEntry = (dateStr, entryId) => {
+    setWaterStats(prev => ({
+      ...prev,
+      entries: {
+        ...prev.entries,
+        [dateStr]: (prev.entries?.[dateStr] || []).filter(e => e.id !== entryId)
+      }
+    }));
+  };
+
+  const setWaterGoal = (goal) => {
+    setWaterStats(prev => ({ ...prev, goal }));
+  };
+
   const handleExportData = () => {
-    const dataStr = JSON.stringify({ habits, journalEntries }, null, 2);
+    const dataStr = JSON.stringify({ habits, journalEntries, waterStats }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const exportFileDefaultName = `habitAI_backup_${getTodayStr()}.json`;
     const linkElement = document.createElement('a');
@@ -412,6 +460,12 @@ export default function App() {
         } else if (importedData && Array.isArray(importedData.habits)) {
           setHabits(importedData.habits);
           setJournalEntries(importedData.journalEntries || {});
+          if (importedData.waterStats) {
+            setWaterStats({
+              goal: importedData.waterStats.goal || 2500,
+              entries: importedData.waterStats.entries || {}
+            });
+          }
           showToast("הנתונים שוחזרו בהצלחה!");
         } else {
           showToast("קובץ הגיבוי אינו תקין.");
@@ -565,11 +619,21 @@ export default function App() {
                 />
               )}
               {activeTab === 'journal' && (
-                <DailyJournal
-                  habits={habits}
-                  journalEntries={journalEntries}
-                  saveJournalEntry={saveJournalEntry}
-                />
+                <>
+                  <div className="mb-6">
+                    <WaterTracker
+                      waterStats={waterStats}
+                      addWaterIntake={addWaterIntake}
+                      removeWaterEntry={removeWaterEntry}
+                      setWaterGoal={setWaterGoal}
+                    />
+                  </div>
+                  <DailyJournal
+                    habits={habits}
+                    journalEntries={journalEntries}
+                    saveJournalEntry={saveJournalEntry}
+                  />
+                </>
               )}
               {activeTab === 'manage' && (
                 <ManageHabits
