@@ -85,6 +85,32 @@ export const getCompletionRateForDate = (habits, dateStr) => {
   return Math.round((completed / dueHabits.length) * 100);
 };
 
+// בונה את תוכן התזכורת היומית (כותרת/גוף/אייקון) בהתאם למה שעוד לא הושלם
+// בתאריך נתון - משמש גם להתראת הדפדפן וגם לתזכורת המתוזמנת באפליקציה הנייטיבית,
+// כדי ששתיהן ירשמו את שמות ההרגלים הספציפיים שנשארו במקום הודעה גנרית.
+export const getReminderMessage = (habits, dateStr) => {
+  const uncompleted = habits.filter(h => {
+    const freqType = h.frequency?.type || h.frequency;
+    if (freqType === 'weekly') {
+      const target = h.frequency?.target || 7;
+      return getCompletionsThisWeek(h.logs) < target && (!h.logs || !h.logs[dateStr]);
+    }
+    return isHabitScheduledOnDate(h, dateStr) && (!h.logs || !h.logs[dateStr]);
+  });
+
+  if (uncompleted.length > 0) {
+    return {
+      title: 'זמן להתעורר! משימות מחכות לך ⏳',
+      body: `הרגלים שנשארו להיום: ${uncompleted.map(h => h.name).join(', ')}`,
+      icon: '🔔'
+    };
+  }
+  if (habits.length > 0) {
+    return { title: 'הכל הושלם! 🌟', body: 'כל הכבוד! סיימת את כל המשימות שלך להיום.', icon: '🏆' };
+  }
+  return { title: 'זמן להתעורר! משימות מחכות לך ⏳', body: 'בדוק/י אילו הרגלים עדיין לא סימנת היום ב-HabitAI.', icon: '🔔' };
+};
+
 // מחשב רצף ימים רצוף עבור הרגל. עבור הרגל בתדירות "ימים נבחרים" (custom),
 // ימים שלא נבחרו עבור ההרגל מדולגים לגמרי - הם לא שוברים את הרצף וגם לא
 // מקדמים אותו, בדיוק כאילו ההרגל לא היה קיים באותו יום.

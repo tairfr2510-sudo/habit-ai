@@ -11,22 +11,35 @@ export async function requestNativeNotificationPermission() {
   return result.display === 'granted';
 }
 
-// מתזמן תזכורת יומית חוזרת בשעה שנבחרה, ישירות דרך מערכת ההפעלה של הטלפון -
-// כך שהיא תופיע גם כשהאפליקציה סגורה לגמרי (בשונה מטיימר ב-JS שרץ רק כשהאפליקציה פתוחה).
-export async function scheduleNativeDailyReminder(reminderTime) {
+// מתזמן תזכורת לשעה שנבחרה, ישירות דרך מערכת ההפעלה של הטלפון - כך שהיא
+// תופיע גם כשהאפליקציה סגורה לגמרי (בשונה מטיימר ב-JS שרץ רק כשהאפליקציה פתוחה).
+//
+// בכוונה זו תזכורת חד-פעמית (schedule.at) לקרות הבאה של השעה הנבחרת, ולא תזכורת
+// חוזרת (repeats) - כי תזכורת חוזרת מקבלת תוכן קבוע בזמן התזמון ואי אפשר לעדכן
+// אותה בזמן שהיא "מחכה" בתוך מערכת ההפעלה. כדי שהתוכן ישקף את ההרגלים שעוד לא
+// הושלמו, האפליקציה קוראת לפונקציה הזו מחדש (מבטלת ומתזמנת מחדש) בכל פעם שרשימת
+// ההרגלים או מצב ההשלמה שלהם משתנה - כך שבזמן שהתזכורת בפועל מגיעה, היא כבר
+// מכילה את התמונה העדכנית ביותר שהייתה זמינה. המשמעות: התזכורת תישאר מדויקת כל
+// עוד האפליקציה נפתחת מדי פעם באותו יום; אם היא לא נפתחת בכלל, לא תתוזמן תזכורת
+// חדשה עד שהיא תיפתח שוב.
+export async function scheduleNativeDailyReminder(reminderTime, message) {
   const [hourStr, minuteStr] = reminderTime.split(':');
   const hour = parseInt(hourStr, 10);
   const minute = parseInt(minuteStr, 10);
   if (Number.isNaN(hour) || Number.isNaN(minute)) return;
+
+  const next = new Date();
+  next.setHours(hour, minute, 0, 0);
+  if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
 
   await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
   await LocalNotifications.schedule({
     notifications: [
       {
         id: DAILY_REMINDER_ID,
-        title: 'זמן להתעורר! משימות מחכות לך ⏳',
-        body: 'בדוק/י אילו הרגלים עדיין לא סימנת היום ב-HabitAI.',
-        schedule: { on: { hour, minute }, repeats: true, allowWhileIdle: true }
+        title: message?.title || 'זמן להתעורר! משימות מחכות לך ⏳',
+        body: message?.body || 'בדוק/י אילו הרגלים עדיין לא סימנת היום ב-HabitAI.',
+        schedule: { at: next, allowWhileIdle: true }
       }
     ]
   });

@@ -13,7 +13,8 @@ import {
   getCompletionsThisWeek,
   calculateStreak,
   isHabitScheduledOnDate,
-  getScheduleLabel
+  getScheduleLabel,
+  getReminderMessage
 } from './utils/habitUtils';
 import Toast from './components/Toast';
 import NoteModal from './components/NoteModal';
@@ -213,10 +214,13 @@ export default function App() {
   // בפלטפורמה אמיתית (אפליקציה מותקנת דרך Capacitor) התזכורת מתוזמנת ישירות במערכת ההפעלה
   // של הטלפון (ראה scheduleNativeDailyReminder), כך שהיא פועלת גם כשהאפליקציה סגורה.
   // בדפדפן רגיל אין אפשרות כזו, ולכן ממשיכים להסתמך על טיימר שרץ כל עוד האפליקציה פתוחה.
+  // התלות ב-habits חשובה כאן: היא גורמת לתזכורת להתזמן מחדש עם רשימת ההרגלים שעוד לא
+  // הושלמו בכל פעם שמסמנים/מוסיפים/מוחקים הרגל, כדי שהתוכן שיגיע בפועל יהיה עדכני.
   useEffect(() => {
     if (!isNativePlatform() || !browserNotifyEnabled) return;
-    scheduleNativeDailyReminder(reminderTime);
-  }, [browserNotifyEnabled, reminderTime]);
+    const message = getReminderMessage(habits, getTodayStr());
+    scheduleNativeDailyReminder(reminderTime, message);
+  }, [browserNotifyEnabled, reminderTime, habits]);
 
   // מערכת בדיקת תזכורות אוטומטית (דפדפן בלבד) - בודקת כל 15 שניות מול הזמן שהוגדר.
   // habits נקרא דרך ref כדי שהטיימר לא יתאפס בכל שינוי בהרגלים (וכך לא יפספס את הרגע המדויק)
@@ -236,30 +240,9 @@ export default function App() {
       if (currentTime !== reminderTime || lastReminderDate === todayStr) return;
 
       const currentHabits = habitsRef.current;
-      const uncompletedDaily = currentHabits.filter(h => {
-        const freqType = h.frequency?.type || h.frequency;
-        return (freqType === 'daily' || freqType === 'custom') && isHabitScheduledOnDate(h, todayStr) && (!h.logs || !h.logs[todayStr]);
-      });
-      const uncompletedWeekly = currentHabits.filter(h => {
-        const freqType = h.frequency?.type || h.frequency;
-        if (freqType !== 'weekly') return false;
-        const target = h.frequency?.target || 7;
-        return getCompletionsThisWeek(h.logs) < target && (!h.logs || !h.logs[todayStr]);
-      });
-      const uncompletedHabits = [...uncompletedDaily, ...uncompletedWeekly];
-
-      if (uncompletedHabits.length > 0) {
-        const names = uncompletedHabits.map(h => h.name).join(', ');
-        const title = "זמן להתעורר! משימות מחכות לך ⏳";
-        const body = `הרגלים שנשארו להיום: ${names}`;
-        new Notification(title, { body, icon: "🔔" });
-        addNotification(title, body);
-      } else if (currentHabits.length > 0) {
-        const title = "הכל הושלם! 🌟";
-        const body = "כל הכבוד! סיימת את כל המשימות שלך להיום.";
-        new Notification(title, { body, icon: "🏆" });
-        addNotification(title, body);
-      }
+      const { title, body, icon } = getReminderMessage(currentHabits, todayStr);
+      new Notification(title, { body, icon });
+      addNotification(title, body);
       setLastReminderDate(todayStr); // מסמנים שהתרענו להיום
     };
 
@@ -272,8 +255,7 @@ export default function App() {
     if (isNativePlatform()) {
       const granted = await requestNativeNotificationPermission();
       if (granted) {
-        setBrowserNotifyEnabled(true);
-        await scheduleNativeDailyReminder(reminderTime);
+        setBrowserNotifyEnabled(true); // מפעיל את ה-effect שמתזמן את התזכורת עם התוכן העדכני
         addNotification("HabitAI", "מעולה! תזכורות יומיות הופעלו בטלפון.");
         showToast("תזכורות הופעלו בהצלחה!");
       } else {
