@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Star, Flame, Zap, Medal } from 'lucide-react';
+import { Star, Flame, Zap, Medal, Rocket, Crown, CheckCircle2, Award, Trophy, Shield, Layers, Target } from 'lucide-react';
 import {
   isNativePlatform,
   requestNativeNotificationPermission,
   scheduleNativeDailyReminder
 } from './lib/nativeReminders';
-import { INITIAL_HABITS } from './constants';
+import { INITIAL_HABITS, CATEGORIES } from './constants';
 import {
   getTodayStr,
   getLastNDays,
   formatDateToHebrew,
   getCompletionsThisWeek,
-  calculateStreak
+  calculateStreak,
+  isHabitScheduledOnDate,
+  getScheduleLabel
 } from './utils/habitUtils';
 import Toast from './components/Toast';
 import NoteModal from './components/NoteModal';
@@ -41,6 +43,7 @@ export default function App() {
   const [newHabitCategory, setNewHabitCategory] = useState('health');
   const [newHabitFreqType, setNewHabitFreqType] = useState('daily');
   const [newHabitFreqTarget, setNewHabitFreqTarget] = useState(3);
+  const [newHabitCustomDays, setNewHabitCustomDays] = useState([0, 1, 2, 3, 4]);
 
   // AI & Gamification
   const [aiInsight, setAiInsight] = useState('');
@@ -235,7 +238,7 @@ export default function App() {
       const currentHabits = habitsRef.current;
       const uncompletedDaily = currentHabits.filter(h => {
         const freqType = h.frequency?.type || h.frequency;
-        return freqType === 'daily' && (!h.logs || !h.logs[todayStr]);
+        return (freqType === 'daily' || freqType === 'custom') && isHabitScheduledOnDate(h, todayStr) && (!h.logs || !h.logs[todayStr]);
       });
       const uncompletedWeekly = currentHabits.filter(h => {
         const freqType = h.frequency?.type || h.frequency;
@@ -369,11 +372,19 @@ export default function App() {
   const addHabit = (e) => {
     e.preventDefault();
     if (!newHabitName.trim()) return;
+    if (newHabitFreqType === 'custom' && newHabitCustomDays.length === 0) {
+      showToast("יש לבחור לפחות יום אחד.");
+      return;
+    }
+    const frequency = { type: newHabitFreqType, target: newHabitFreqType === 'weekly' ? parseInt(newHabitFreqTarget) : 7 };
+    if (newHabitFreqType === 'custom') {
+      frequency.days = [...newHabitCustomDays].sort((a, b) => a - b);
+    }
     const newHabit = {
       id: Date.now().toString(),
       name: newHabitName.trim(),
       category: newHabitCategory,
-      frequency: { type: newHabitFreqType, target: newHabitFreqType === 'weekly' ? parseInt(newHabitFreqTarget) : 7 },
+      frequency,
       logs: {},
       notes: {},
       createdAt: new Date().toISOString()
@@ -386,6 +397,11 @@ export default function App() {
   const deleteHabit = (id) => {
     setHabits(prev => prev.filter(h => h.id !== id));
     showToast("ההרגל נמחק.");
+  };
+
+  const updateHabit = (id, updates) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h));
+    showToast("ההרגל עודכן בהצלחה!");
   };
 
   const saveNote = (habitId, dateStr, noteText) => {
@@ -480,11 +496,14 @@ export default function App() {
 
   const statsData = useMemo(() => {
     const last7Days = getLastNDays(7);
-    const dailyHabits = habits.filter(h => (h.frequency?.type || h.frequency) === 'daily');
 
     return last7Days.map(date => {
-      const total = dailyHabits.length;
-      const completed = dailyHabits.filter(h => h.logs && h.logs[date]).length;
+      const dueHabits = habits.filter(h => {
+        const freqType = h.frequency?.type || h.frequency;
+        return (freqType === 'daily' || freqType === 'custom') && isHabitScheduledOnDate(h, date);
+      });
+      const total = dueHabits.length;
+      const completed = dueHabits.filter(h => h.logs && h.logs[date]).length;
       return {
         date: formatDateToHebrew(date),
         rawDate: date,
@@ -506,12 +525,26 @@ export default function App() {
 
   const earnedBadges = useMemo(() => {
     const badges = [];
-    const maxStreak = habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h.logs))) : 0;
+    const maxStreak = habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h))) : 0;
+    const totalCompletions = habits.reduce((sum, h) => sum + Object.values(h.logs || {}).filter(Boolean).length, 0);
+    const categoriesUsed = new Set(habits.map(h => h.category)).size;
+    const weeklyGoalMetNow = habits.some(h => {
+      const freqType = h.frequency?.type || (typeof h.frequency === 'string' ? h.frequency : 'daily');
+      return freqType === 'weekly' && getCompletionsThisWeek(h.logs) >= (h.frequency?.target || 7);
+    });
 
     if (userStats.totalXP > 0) badges.push({ id: 1, name: 'צעד ראשון', desc: 'השלמת הרגל ראשון', icon: Star, color: 'text-yellow-600 bg-yellow-100 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-700' });
     if (maxStreak >= 3) badges.push({ id: 2, name: 'במומנטום', desc: 'רצף של 3 ימים', icon: Flame, color: 'text-orange-600 bg-orange-100 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-700' });
     if (maxStreak >= 7) badges.push({ id: 3, name: 'בלתי ניתן לעצירה', desc: 'רצף של שבוע', icon: Zap, color: 'text-purple-600 bg-purple-100 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-700' });
+    if (maxStreak >= 14) badges.push({ id: 5, name: 'שבועיים ברצף', desc: 'רצף של 14 ימים', icon: Rocket, color: 'text-pink-600 bg-pink-100 border-pink-200 dark:bg-pink-900/40 dark:text-pink-400 dark:border-pink-700' });
+    if (maxStreak >= 30) badges.push({ id: 6, name: 'חודש מושלם', desc: 'רצף של 30 ימים', icon: Crown, color: 'text-amber-600 bg-amber-100 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-700' });
+    if (totalCompletions >= 10) badges.push({ id: 7, name: 'עשר השלמות', desc: '10 הרגלים הושלמו בסך הכל', icon: CheckCircle2, color: 'text-teal-600 bg-teal-100 border-teal-200 dark:bg-teal-900/40 dark:text-teal-400 dark:border-teal-700' });
+    if (totalCompletions >= 50) badges.push({ id: 8, name: 'חמישים השלמות', desc: '50 הרגלים הושלמו בסך הכל', icon: Award, color: 'text-cyan-600 bg-cyan-100 border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-400 dark:border-cyan-700' });
+    if (totalCompletions >= 100) badges.push({ id: 9, name: 'מאה השלמות', desc: '100 הרגלים הושלמו בסך הכל', icon: Trophy, color: 'text-emerald-600 bg-emerald-100 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-700' });
     if (userStats.level >= 3) badges.push({ id: 4, name: 'מתמיד', desc: 'הגעת לרמה 3', icon: Medal, color: 'text-blue-600 bg-blue-100 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700' });
+    if (userStats.level >= 6) badges.push({ id: 10, name: 'ותיק', desc: 'הגעת לרמה 6', icon: Shield, color: 'text-violet-600 bg-violet-100 border-violet-200 dark:bg-violet-900/40 dark:text-violet-400 dark:border-violet-700' });
+    if (categoriesUsed >= 3) badges.push({ id: 11, name: 'מגוון הרגלים', desc: 'הרגלים בלפחות 3 קטגוריות שונות', icon: Layers, color: 'text-green-600 bg-green-100 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-700' });
+    if (weeklyGoalMetNow) badges.push({ id: 12, name: 'יעד שבועי הושג', desc: 'עמדת ביעד שבועי של הרגל השבוע', icon: Target, color: 'text-rose-600 bg-rose-100 border-rose-200 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-700' });
 
     return badges;
   }, [habits, userStats]);
@@ -530,11 +563,38 @@ export default function App() {
       return;
     }
 
+    // סיכום מספרי נקי במקום שליחת אובייקט ה-habits הגולמי - כולל רק את מה שרלוונטי
+    // לניתוח (רצפים, אחוזי עמידה בלוח הזמנים), בלי לחשוף את תוכן הפתקים האישיים
+    // ובלי "לבזבז" הקשר על שדות פנימיים כמו id/createdAt.
+    const last14Days = getLastNDays(14);
+    const habitsSummary = habits.map(h => {
+      const freqType = h.frequency?.type || (typeof h.frequency === 'string' ? h.frequency : 'daily');
+      const category = CATEGORIES.find(c => c.id === h.category)?.name || h.category;
+      const base = {
+        שם: h.name,
+        קטגוריה: category,
+        לוח_זמנים: getScheduleLabel(h),
+        רצף_נוכחי: calculateStreak(h)
+      };
+      if (freqType === 'weekly') {
+        base.השלמות_השבוע = `${getCompletionsThisWeek(h.logs)}/${h.frequency?.target || 7}`;
+      } else {
+        const scheduledDays = last14Days.filter(d => isHabitScheduledOnDate(h, d));
+        const completedDays = scheduledDays.filter(d => h.logs && h.logs[d]);
+        base['אחוז_עמידה_14_ימים_אחרונים'] = scheduledDays.length > 0
+          ? `${Math.round((completedDays.length / scheduledDays.length) * 100)}%`
+          : 'אין עדיין מספיק נתונים';
+      }
+      return base;
+    });
+
     const prompt = `
-      אני מנהל מעקב אחרי ההרגלים שלי ב-HabitAI. נתונים ב-JSON: ${JSON.stringify(habits)}.
-      1. תן לי חיזוק חיובי קצרצר.
-      2. זהה אזורים בהם אני מתקשה והצע אסטרטגיה אחת מעשית.
-      ענה בפסקה זורמת אחת בעברית חמה ומעודדת, ללא רשימות.
+      הנה סיכום ביצועי ההרגלים שלי (JSON): ${JSON.stringify(habitsSummary)}
+
+      זו הודעת בוקר קצרה שאני קורא כל יום מהמאמן האישי שלי. בהתבסס אך ורק על הנתונים האלה, כתוב לי בדיוק שני משפטים קצרים וישירים, בלי כותרות, בלי רשימות, בלי מבוא:
+      משפט 1: מוטיבציה ממוקדת בהישג ספציפי מהנתונים (רצף מסוים, אחוז עמידה גבוה וכו') - לא מחמאה כללית.
+      משפט 2: הדבר האחד הכי חשוב לשפר היום, מבוסס על ההרגל שהכי מפגר בנתונים, עם טיפ מעשי קונקרטי ליישום מיידי.
+      תכל'ס, בלי פילוסופיה, בלי מילים מיותרות.
     `;
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
@@ -544,7 +604,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: "אתה מאמן אישי ידידותי בעברית." }] }
+          systemInstruction: { parts: [{ text: "אתה מאמן אישי (habit coach) תכליתי שכותב הודעות בוקר קצרות בעברית טבעית. אתה תמיד מתבסס רק על הנתונים שסופקו לך ולעולם לא ממציא פרטים שלא נמצאים בהם. אתה כותב קצר וממוקד - בלי הקדמות, בלי מליצות, בלי חזרות מיותרות. הטון שלך אנרגטי, ישיר וממוקד פעולה, לא מתרפס ולא מגזים בשבחים." }] }
         })
       });
       const data = await response.json();
@@ -649,6 +709,8 @@ export default function App() {
                   setNewHabitFreqType={setNewHabitFreqType}
                   newHabitFreqTarget={newHabitFreqTarget}
                   setNewHabitFreqTarget={setNewHabitFreqTarget}
+                  newHabitCustomDays={newHabitCustomDays}
+                  setNewHabitCustomDays={setNewHabitCustomDays}
                   addHabit={addHabit}
                   handleExportData={handleExportData}
                   handleImportData={handleImportData}
@@ -661,6 +723,7 @@ export default function App() {
                   handleHabitDragEnd={handleHabitDragEnd}
                   moveHabit={moveHabit}
                   deleteHabit={deleteHabit}
+                  updateHabit={updateHabit}
                 />
               )}
               {activeTab === 'analytics' && (

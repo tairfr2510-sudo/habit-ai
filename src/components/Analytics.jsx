@@ -30,7 +30,7 @@ export default function Analytics({ habits, userStats, statsData, heatmapData, e
         <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-5 rounded-2xl border border-orange-100 dark:border-orange-900/50 text-center transition-colors">
            <Flame className="text-orange-500 mx-auto mb-2" size={28} />
            <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-400 mb-1">שיא רצף</h4>
-           <span className="text-2xl font-bold text-orange-600 dark:text-orange-500">{habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h.logs))) : 0}</span>
+           <span className="text-2xl font-bold text-orange-600 dark:text-orange-500">{habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h))) : 0}</span>
         </div>
       </div>
 

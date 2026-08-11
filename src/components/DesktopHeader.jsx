@@ -10,7 +10,7 @@ export default function DesktopHeader({
   toggleNotificationsPanel,
   closeNotificationsPanel
 }) {
-  const maxStreak = habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h.logs))) : 0;
+  const maxStreak = habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h))) : 0;
 
   return (
     <div className="hidden md:flex justify-end mb-8 items-center gap-6">

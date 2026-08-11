@@ -1,5 +1,5 @@
 import { Target, Sparkles, Trophy, Star, CalendarDays, Plus, BrainCircuit, Activity } from 'lucide-react';
-import { getTodayStr, getCompletionsThisWeek, formatDateToHebrew } from '../utils/habitUtils';
+import { getTodayStr, getCompletionsThisWeek, formatDateToHebrew, isHabitScheduledOnDate, getScheduleLabel } from '../utils/habitUtils';
 import HabitCard from './HabitCard';
 
 export default function Dashboard({
@@ -14,9 +14,18 @@ export default function Dashboard({
 }) {
   const today = getTodayStr();
 
-  const dailyHabits = habits.filter(h => (h.frequency?.type || h.frequency) === 'daily');
+  // יעדי היום כוללים הרגלים יומיים וגם הרגלי "ימים נבחרים" שהיום נמצא בלוח הזמנים שלהם
+  const dailyHabits = habits.filter(h => {
+    const freqType = h.frequency?.type || h.frequency;
+    return (freqType === 'daily' || freqType === 'custom') && isHabitScheduledOnDate(h, today);
+  });
   const dailyCompletedCount = dailyHabits.filter(h => h.logs && h.logs[today]).length;
   const dailyProgress = dailyHabits.length > 0 ? (dailyCompletedCount / dailyHabits.length) * 100 : 0;
+
+  const customHabitsNotToday = habits.filter(h => {
+    const freqType = h.frequency?.type || h.frequency;
+    return freqType === 'custom' && !isHabitScheduledOnDate(h, today);
+  });
 
   const weeklyHabits = habits.filter(h => (h.frequency?.type || h.frequency) === 'weekly');
   let weeklyTotalTargets = 0;
@@ -125,6 +134,17 @@ export default function Dashboard({
                     <HabitCard key={habit.id} habit={habit} today={today} onToggle={onToggleHabit} onOpenNote={onOpenNote} />
                   ))}
                 </div>
+              )}
+              {dailyHabits.length === 0 && weeklyHabits.length === 0 && (
+                <p className="text-slate-500 dark:text-slate-400 text-center py-6">אין לך משימות מתוזמנות להיום. תיהנה מהיום החופשי! 🎉</p>
+              )}
+              {customHabitsNotToday.length > 0 && (
+                <p className="text-sm text-slate-400 dark:text-slate-500 flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
+                  <span>לא היום:</span>
+                  {customHabitsNotToday.map(h => (
+                    <span key={h.id} className="px-2 py-0.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">{h.name} ({getScheduleLabel(h)})</span>
+                  ))}
+                </p>
               )}
             </div>
           )}

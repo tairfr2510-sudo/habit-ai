@@ -25,6 +25,37 @@ export const formatDateToHebrew = (dateStr) => {
   return new Intl.DateTimeFormat('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' }).format(date);
 };
 
+// האם ההרגל אמור להתבצע בתאריך נתון - הרגל יומי תמיד, הרגל בתדירות "ימים
+// נבחרים" (custom) רק בימים שנבחרו עבורו, והרגל שבועי תמיד false כי אין לו
+// יום קבוע (הוא נמדד לפי מכסה שבועית ולא לפי יום ספציפי).
+export const isHabitScheduledOnDate = (habit, dateStr) => {
+  const freqType = habit?.frequency?.type || (typeof habit?.frequency === 'string' ? habit.frequency : 'daily');
+  if (freqType === 'daily') return true;
+  if (freqType === 'custom') {
+    const days = habit?.frequency?.days;
+    if (!Array.isArray(days) || days.length === 0) return true;
+    const dayOfWeek = new Date(`${dateStr}T12:00:00`).getDay();
+    return days.includes(dayOfWeek);
+  }
+  return false;
+};
+
+const DAY_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+
+// תווית קצרה לתיאור לוח הזמנים של ההרגל, מוצגת בכרטיס ההרגל וברשימת הניהול
+export const getScheduleLabel = (habit) => {
+  const freqType = habit?.frequency?.type || (typeof habit?.frequency === 'string' ? habit.frequency : 'daily');
+  if (freqType === 'weekly') return `${habit?.frequency?.target || 7} פעמים בשבוע`;
+  if (freqType === 'custom') {
+    const days = Array.isArray(habit?.frequency?.days) ? [...habit.frequency.days].sort((a, b) => a - b) : [];
+    if (days.length === 0 || days.length === 7) return 'כל יום';
+    if (days.length === 5 && [0, 1, 2, 3, 4].every(d => days.includes(d))) return 'ימי חול';
+    if (days.length === 2 && [5, 6].every(d => days.includes(d))) return 'סופ"ש';
+    return days.map(d => `יום ${DAY_LETTERS[d]}'`).join(', ');
+  }
+  return 'כל יום';
+};
+
 export const getCompletionsThisWeek = (logs) => {
   const today = new Date();
   const currentDay = today.getDay();
@@ -38,19 +69,28 @@ export const getCompletionsThisWeek = (logs) => {
   return count;
 };
 
-// אחוז ההרגלים היומיים שהושלמו בתאריך נתון - משמש לציר הזמן ביומן היומי,
-// כדי להציג לצד כל רשומה כמה הושלם באותו יום. מחושב רק מתוך הרגלים בתדירות
-// יומית (כמו בדשבורד), כי הרגל שבועי לא אמור להיחשב "לא הושלם" בכל יום
-// שהוא לא בוצע בו - הדבר עיוות את האחוז כלפי מטה בטעות.
+// אחוז ההרגלים שהושלמו בתאריך נתון - משמש לציר הזמן ביומן היומי, כדי להציג
+// לצד כל רשומה כמה הושלם באותו יום. מחושב רק מתוך הרגלים שהיו אמורים
+// להתבצע באותו יום (יומי, או "ימים נבחרים" שהתאריך נכלל בלוח שלהם), כי הרגל
+// שבועי לא אמור להיחשב "לא הושלם" בכל יום שהוא לא בוצע בו - הדבר עיוות את
+// האחוז כלפי מטה בטעות.
 export const getCompletionRateForDate = (habits, dateStr) => {
   if (!habits || habits.length === 0) return 0;
-  const dailyHabits = habits.filter(h => (h.frequency?.type || h.frequency) === 'daily');
-  if (dailyHabits.length === 0) return 0;
-  const completed = dailyHabits.filter(h => h.logs && h.logs[dateStr]).length;
-  return Math.round((completed / dailyHabits.length) * 100);
+  const dueHabits = habits.filter(h => {
+    const freqType = h.frequency?.type || h.frequency;
+    return (freqType === 'daily' || freqType === 'custom') && isHabitScheduledOnDate(h, dateStr);
+  });
+  if (dueHabits.length === 0) return 0;
+  const completed = dueHabits.filter(h => h.logs && h.logs[dateStr]).length;
+  return Math.round((completed / dueHabits.length) * 100);
 };
 
-export const calculateStreak = (habitLogs) => {
+// מחשב רצף ימים רצוף עבור הרגל. עבור הרגל בתדירות "ימים נבחרים" (custom),
+// ימים שלא נבחרו עבור ההרגל מדולגים לגמרי - הם לא שוברים את הרצף וגם לא
+// מקדמים אותו, בדיוק כאילו ההרגל לא היה קיים באותו יום.
+export const calculateStreak = (habit) => {
+  const logs = habit?.logs;
+  const freqType = habit?.frequency?.type || (typeof habit?.frequency === 'string' ? habit.frequency : 'daily');
   let streak = 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -60,7 +100,9 @@ export const calculateStreak = (habitLogs) => {
     d.setDate(d.getDate() - i);
     const dateStr = formatDateToInput(d);
 
-    if (habitLogs && habitLogs[dateStr]) {
+    if (freqType === 'custom' && !isHabitScheduledOnDate(habit, dateStr)) continue;
+
+    if (logs && logs[dateStr]) {
       streak++;
     } else if (i !== 0) {
       break;

@@ -1,6 +1,6 @@
 import { CheckCircle, Circle, Trophy, Flame, FileText } from 'lucide-react';
 import { CATEGORIES } from '../constants';
-import { getCompletionsThisWeek, calculateStreak } from '../utils/habitUtils';
+import { getCompletionsThisWeek, calculateStreak, getScheduleLabel } from '../utils/habitUtils';
 
 export default function HabitCard({ habit, today, onToggle, onOpenNote }) {
   const isCompleted = habit.logs && !!habit.logs[today];
@@ -8,7 +8,7 @@ export default function HabitCard({ habit, today, onToggle, onOpenNote }) {
   const freqType = habit.frequency?.type || (typeof habit.frequency === 'string' ? habit.frequency : 'daily');
   const target = habit.frequency?.target || 7;
   const completionsThisWeek = getCompletionsThisWeek(habit.logs);
-  const streak = calculateStreak(habit.logs);
+  const streak = calculateStreak(habit);
   const isWeeklyGoalMet = freqType === 'weekly' && completionsThisWeek >= target;
   const hasNote = habit.notes && habit.notes[today];
 
@@ -34,19 +34,26 @@ export default function HabitCard({ habit, today, onToggle, onOpenNote }) {
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${category?.color}`}>
               {category?.name}
             </span>
-            {freqType === 'daily' ? (
-              streak > 2 && (
-                <span className="text-xs text-orange-600 flex items-center font-bold bg-orange-100 px-2.5 py-1 rounded-lg dark:bg-orange-900/30 dark:text-orange-400">
-                  <Flame size={14} className="ml-1" />
-                  {streak} ברצף!
-                </span>
-              )
-            ) : (
+            {freqType === 'weekly' ? (
               <span className={`text-xs flex items-center font-bold px-2.5 py-1 rounded-lg ${
                 isWeeklyGoalMet ? 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 'bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800'
               }`}>
                 {completionsThisWeek}/{target} השבוע
               </span>
+            ) : (
+              <>
+                {freqType === 'custom' && (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600">
+                    {getScheduleLabel(habit)}
+                  </span>
+                )}
+                {streak > 2 && (
+                  <span className="text-xs text-orange-600 flex items-center font-bold bg-orange-100 px-2.5 py-1 rounded-lg dark:bg-orange-900/30 dark:text-orange-400">
+                    <Flame size={14} className="ml-1" />
+                    {streak} ברצף!
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>

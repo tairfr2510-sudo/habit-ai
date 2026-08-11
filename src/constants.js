@@ -11,6 +11,17 @@ export const INITIAL_HABITS = [
   { id: '3', name: 'אימון כוח', category: 'health', frequency: { type: 'weekly', target: 3 }, logs: {}, notes: {}, createdAt: new Date().toISOString() },
 ];
 
+// אינדקסים תואמים ל-Date.getDay() (0 = ראשון ... 6 = שבת)
+export const DAYS_OF_WEEK = [
+  { value: 0, label: 'ראשון', short: 'א' },
+  { value: 1, label: 'שני', short: 'ב' },
+  { value: 2, label: 'שלישי', short: 'ג' },
+  { value: 3, label: 'רביעי', short: 'ד' },
+  { value: 4, label: 'חמישי', short: 'ה' },
+  { value: 5, label: 'שישי', short: 'ו' },
+  { value: 6, label: 'שבת', short: 'ש' },
+];
+
 export const MOODS = [
   { emoji: '🤩', label: 'מעולה' },
   { emoji: '🙂', label: 'טוב' },
