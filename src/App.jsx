@@ -398,11 +398,24 @@ export default function App() {
     showToast("ההערה נשמרה ביומן.");
   };
 
+  const markHabitDoneByKeyword = (keyword, dateStr) => {
+    setHabits(prev => {
+      const target = prev.find(h => h.name.includes(keyword));
+      if (!target) return prev;
+      const logs = target.logs || {};
+      if (logs[dateStr]) return prev;
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2000);
+      return prev.map(h => h.id === target.id ? { ...h, logs: { ...logs, [dateStr]: true } } : h);
+    });
+  };
+
   const saveJournalEntry = (dateStr, mood, text) => {
     setJournalEntries(prev => ({
       ...prev,
       [dateStr]: { mood, text, updatedAt: new Date().toISOString() }
     }));
+    markHabitDoneByKeyword('יומן', dateStr);
     showToast("הרשומה נשמרה ביומן היומי!");
   };
 
@@ -416,6 +429,10 @@ export default function App() {
         [today]: [...(prev.entries?.[today] || []), entry]
       }
     }));
+    const currentTotal = (waterStats.entries?.[today] || []).reduce((s, e) => s + e.amount, 0);
+    if (currentTotal + amount >= waterStats.goal) {
+      markHabitDoneByKeyword('מים', today);
+    }
     showToast(`נוסף ${amount} מ"ל למעקב המים.`);
   };
 
