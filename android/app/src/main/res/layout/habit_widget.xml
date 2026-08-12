@@ -102,153 +102,31 @@
         android:progress="0"
         android:progressDrawable="@drawable/widget_progress_drawable" />
 
-    <LinearLayout
-        android:id="@+id/widget_habit_row_1"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="9dp"
-        android:paddingBottom="4dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp">
 
-        <ImageView
-            android:id="@+id/widget_habit_icon_1"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_check_off" />
-
-        <ImageView
-            android:id="@+id/widget_habit_dot_1"
-            android:layout_width="7dp"
-            android:layout_height="7dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_category_dot" />
+        <ListView
+            android:id="@+id/widget_habits_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none"
+            android:fadingEdge="none" />
 
         <TextView
-            android:id="@+id/widget_habit_text_1"
-            android:layout_width="0dp"
+            android:id="@+id/widget_empty_view"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/widget_habit_row_2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
-
-        <ImageView
-            android:id="@+id/widget_habit_icon_2"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_check_off" />
-
-        <ImageView
-            android:id="@+id/widget_habit_dot_2"
-            android:layout_width="7dp"
-            android:layout_height="7dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_category_dot" />
-
-        <TextView
-            android:id="@+id/widget_habit_text_2"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/widget_habit_row_3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
-
-        <ImageView
-            android:id="@+id/widget_habit_icon_3"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_check_off" />
-
-        <ImageView
-            android:id="@+id/widget_habit_dot_3"
-            android:layout_width="7dp"
-            android:layout_height="7dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_category_dot" />
-
-        <TextView
-            android:id="@+id/widget_habit_text_3"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/widget_habit_row_4"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
-
-        <ImageView
-            android:id="@+id/widget_habit_icon_4"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_check_off" />
-
-        <ImageView
-            android:id="@+id/widget_habit_dot_4"
-            android:layout_width="7dp"
-            android:layout_height="7dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/widget_category_dot" />
-
-        <TextView
-            android:id="@+id/widget_habit_text_4"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/widget_more_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:text=""
-        android:textColor="@color/widget_accent"
-        android:textStyle="bold"
-        android:textSize="12sp"
-        android:visibility="gone" />
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:text="אין הרגלים להיום 🎉"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="12sp" />
+    </FrameLayout>
 
     <FrameLayout
         android:layout_width="match_parent"

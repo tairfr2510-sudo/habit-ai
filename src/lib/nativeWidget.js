@@ -9,7 +9,9 @@ const HabitWidget = registerPlugin('HabitWidget');
 
 const SNAPSHOT_KEY = 'widget_snapshot';
 const PENDING_KEY = 'widget_pending_actions';
-const MAX_WIDGET_HABITS = 4;
+// תקרה טכנית בלבד (מניעת גדילה בלתי מוגבלת של ה-SharedPreferences) - הרשימה
+// עצמה גוללת בוויג'ט, כך שאין צורך להגביל אותה לכמה שורות נראות בו-זמנית.
+const MAX_WIDGET_HABITS = 30;
 
 export const isNativePlatform = () => Capacitor.isNativePlatform();
 

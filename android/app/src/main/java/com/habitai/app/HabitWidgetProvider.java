@@ -8,9 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
-import android.text.SpannableString;
-import android.text.Spanned;
-import android.text.style.StrikethroughSpan;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -25,6 +22,11 @@ import org.json.JSONObject;
  * שמבוצעות מתוך הוויג'ט (סימון הרגל / הוספת מים) מעדכנות רק תצוגה אופטימית
  * כאן, ונצברות בתור "פעולות ממתינות" שה-JS מיישם בפועל על ה-state האמיתי
  * (ראה drainWidgetPendingActions) בפעם הבאה שהאפליקציה נפתחת.
+ *
+ * רשימת ההרגלים עצמה מוצגת ב-ListView (widget_habits_list) שמוזן ע"י
+ * HabitWidgetService/HabitListRemoteViewsFactory, כדי שתהיה גוללת כשיש יותר
+ * הרגלים ממה שנכנס בגובה הוויג'ט - זהו המנגנון הרשמי של אנדרואיד לרשימות
+ * בתוך App Widget (טעינה רגילה של views לא תומכת בגלילה).
  */
 public class HabitWidgetProvider extends AppWidgetProvider {
 
@@ -36,24 +38,10 @@ public class HabitWidgetProvider extends AppWidgetProvider {
     static final String ACTION_ADD_WATER = "com.habitai.app.widget.ACTION_ADD_WATER";
     private static final int WATER_QUICK_ADD_ML = 250;
 
-    private static final int[] ROW_IDS = {
-        R.id.widget_habit_row_1, R.id.widget_habit_row_2, R.id.widget_habit_row_3, R.id.widget_habit_row_4
-    };
-    private static final int[] ICON_IDS = {
-        R.id.widget_habit_icon_1, R.id.widget_habit_icon_2, R.id.widget_habit_icon_3, R.id.widget_habit_icon_4
-    };
-    private static final int[] DOT_IDS = {
-        R.id.widget_habit_dot_1, R.id.widget_habit_dot_2, R.id.widget_habit_dot_3, R.id.widget_habit_dot_4
-    };
-    private static final int[] TEXT_IDS = {
-        R.id.widget_habit_text_1, R.id.widget_habit_text_2, R.id.widget_habit_text_3, R.id.widget_habit_text_4
-    };
-
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        RemoteViews views = buildRemoteViews(context);
         for (int appWidgetId : appWidgetIds) {
-            appWidgetManager.updateAppWidget(appWidgetId, views);
+            appWidgetManager.updateAppWidget(appWidgetId, buildRemoteViews(context, appWidgetId));
         }
     }
 
@@ -72,7 +60,7 @@ public class HabitWidgetProvider extends AppWidgetProvider {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 
-    private static JSONObject readSnapshot(Context context) {
+    static JSONObject readSnapshot(Context context) {
         String raw = prefs(context).getString(SNAPSHOT_KEY, null);
         if (raw == null) return null;
         try {
@@ -160,31 +148,46 @@ public class HabitWidgetProvider extends AppWidgetProvider {
     static void refreshAllWidgets(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         int[] ids = manager.getAppWidgetIds(new ComponentName(context, HabitWidgetProvider.class));
-        RemoteViews views = buildRemoteViews(context);
         for (int id : ids) {
-            manager.updateAppWidget(id, views);
+            manager.updateAppWidget(id, buildRemoteViews(context, id));
         }
+        manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_habits_list);
     }
 
-    private static int categoryColor(Context context, String category) {
+    static int categoryColor(Context context, String category) {
         if ("mind".equals(category)) return context.getColor(R.color.widget_category_mind);
         if ("productivity".equals(category)) return context.getColor(R.color.widget_category_productivity);
         if ("social".equals(category)) return context.getColor(R.color.widget_category_social);
         return context.getColor(R.color.widget_category_health);
     }
 
-    private static RemoteViews buildRemoteViews(Context context) {
+    private static RemoteViews buildRemoteViews(Context context, int appWidgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.habit_widget);
-        int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        int immutableFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
 
         Intent openAppIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-        PendingIntent openAppPending = null;
         if (openAppIntent != null) {
             openAppIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            openAppPending = PendingIntent.getActivity(context, 0, openAppIntent, pendingFlags);
+            PendingIntent openAppPending = PendingIntent.getActivity(context, 0, openAppIntent, immutableFlags);
             views.setOnClickPendingIntent(R.id.widget_header, openAppPending);
-            views.setOnClickPendingIntent(R.id.widget_more_row, openAppPending);
         }
+
+        // מזין את ה-ListView דרך HabitWidgetService; setData עם ה-appWidgetId מבטיח שכל
+        // מופע וויג'ט יקבל Intent ייחודי (לא נחתך/משותף בטעות בין מופעים).
+        Intent listIntent = new Intent(context, HabitWidgetService.class);
+        listIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+        listIntent.setData(Uri.parse("habitwidget://list/" + appWidgetId));
+        views.setRemoteAdapter(R.id.widget_habits_list, listIntent);
+        views.setEmptyView(R.id.widget_habits_list, R.id.widget_empty_view);
+
+        // תבנית ה-PendingIntent לפריטי הרשימה חייבת mutable (לא immutable) כדי
+        // שה-fillInIntent של כל פריט (habit_id) יוכל להתמזג לתוכה בזמן הלחיצה.
+        Intent toggleIntent = new Intent(context, HabitWidgetProvider.class);
+        toggleIntent.setAction(ACTION_TOGGLE_HABIT);
+        PendingIntent toggleTemplate = PendingIntent.getBroadcast(
+            context, 0, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+        );
+        views.setPendingIntentTemplate(R.id.widget_habits_list, toggleTemplate);
 
         JSONObject snapshot = readSnapshot(context);
         if (snapshot == null) {
@@ -192,81 +195,33 @@ public class HabitWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_done_count, "—");
             views.setTextViewText(R.id.widget_streak_count, "0");
             views.setProgressBar(R.id.widget_progress_bar, 100, 0, false);
-            views.setViewVisibility(R.id.widget_more_row, View.GONE);
             views.setTextViewText(R.id.widget_water_text, "פתחו את HabitAI כדי להתחיל");
             views.setProgressBar(R.id.widget_water_progress_bar, 100, 0, false);
             views.setViewVisibility(R.id.widget_water_add_button, View.GONE);
-            for (int rowId : ROW_IDS) {
-                views.setViewVisibility(rowId, View.GONE);
-            }
             return views;
         }
 
-        try {
-            int total = snapshot.optInt("totalHabits", 0);
-            int done = snapshot.optInt("doneHabits", 0);
-            int percent = total > 0 ? Math.min(100, Math.round((done * 100f) / total)) : 0;
+        int total = snapshot.optInt("totalHabits", 0);
+        int done = snapshot.optInt("doneHabits", 0);
+        int percent = total > 0 ? Math.min(100, Math.round((done * 100f) / total)) : 0;
 
-            views.setTextViewText(R.id.widget_date, snapshot.optString("dateLabel", ""));
-            views.setTextViewText(R.id.widget_done_count, done + "/" + total);
-            views.setTextViewText(R.id.widget_streak_count, String.valueOf(snapshot.optInt("bestStreak", 0)));
-            views.setProgressBar(R.id.widget_progress_bar, 100, percent, false);
+        views.setTextViewText(R.id.widget_date, snapshot.optString("dateLabel", ""));
+        views.setTextViewText(R.id.widget_done_count, done + "/" + total);
+        views.setTextViewText(R.id.widget_streak_count, String.valueOf(snapshot.optInt("bestStreak", 0)));
+        views.setProgressBar(R.id.widget_progress_bar, 100, percent, false);
 
-            JSONArray habits = snapshot.optJSONArray("habits");
-            int count = habits == null ? 0 : habits.length();
-            for (int i = 0; i < ROW_IDS.length; i++) {
-                if (habits == null || i >= count) {
-                    views.setViewVisibility(ROW_IDS[i], View.GONE);
-                    continue;
-                }
+        JSONObject water = snapshot.optJSONObject("water");
+        int waterTotal = water == null ? 0 : water.optInt("total", 0);
+        int waterGoal = water == null ? 2500 : water.optInt("goal", 2500);
+        int waterPercent = waterGoal > 0 ? Math.min(100, Math.round((waterTotal * 100f) / waterGoal)) : 0;
+        views.setTextViewText(R.id.widget_water_text, waterTotal + "/" + waterGoal + " מ\"ל");
+        views.setProgressBar(R.id.widget_water_progress_bar, 100, waterPercent, false);
+        views.setViewVisibility(R.id.widget_water_add_button, View.VISIBLE);
 
-                JSONObject habit = habits.getJSONObject(i);
-                String habitId = habit.optString("id");
-                String name = habit.optString("name");
-                boolean isDone = habit.optBoolean("done", false);
-
-                views.setViewVisibility(ROW_IDS[i], View.VISIBLE);
-                views.setImageViewResource(ICON_IDS[i], isDone ? R.drawable.widget_check_on : R.drawable.widget_check_off);
-                views.setInt(DOT_IDS[i], "setColorFilter", categoryColor(context, habit.optString("category")));
-
-                SpannableString label = new SpannableString(name);
-                if (isDone) {
-                    label.setSpan(new StrikethroughSpan(), 0, name.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                }
-                views.setTextViewText(TEXT_IDS[i], label);
-                views.setTextColor(TEXT_IDS[i], isDone ? context.getColor(R.color.widget_text_muted) : context.getColor(R.color.widget_text_primary));
-
-                Intent toggleIntent = new Intent(context, HabitWidgetProvider.class);
-                toggleIntent.setAction(ACTION_TOGGLE_HABIT);
-                toggleIntent.setData(Uri.parse("habitwidget://toggle/" + habitId));
-                toggleIntent.putExtra("habit_id", habitId);
-                PendingIntent togglePending = PendingIntent.getBroadcast(context, habitId.hashCode(), toggleIntent, pendingFlags);
-                views.setOnClickPendingIntent(ROW_IDS[i], togglePending);
-            }
-
-            int extra = total - count;
-            if (extra > 0 && openAppPending != null) {
-                views.setViewVisibility(R.id.widget_more_row, View.VISIBLE);
-                views.setTextViewText(R.id.widget_more_row, "+" + extra + " הרגלים נוספים");
-            } else {
-                views.setViewVisibility(R.id.widget_more_row, View.GONE);
-            }
-
-            JSONObject water = snapshot.optJSONObject("water");
-            int waterTotal = water == null ? 0 : water.optInt("total", 0);
-            int waterGoal = water == null ? 2500 : water.optInt("goal", 2500);
-            int waterPercent = waterGoal > 0 ? Math.min(100, Math.round((waterTotal * 100f) / waterGoal)) : 0;
-            views.setTextViewText(R.id.widget_water_text, waterTotal + "/" + waterGoal + " מ\"ל");
-            views.setProgressBar(R.id.widget_water_progress_bar, 100, waterPercent, false);
-            views.setViewVisibility(R.id.widget_water_add_button, View.VISIBLE);
-
-            Intent addWaterIntent = new Intent(context, HabitWidgetProvider.class);
-            addWaterIntent.setAction(ACTION_ADD_WATER);
-            PendingIntent addWaterPending = PendingIntent.getBroadcast(context, 999999, addWaterIntent, pendingFlags);
-            views.setOnClickPendingIntent(R.id.widget_water_add_button, addWaterPending);
-        } catch (JSONException e) {
-            // במקרה של JSON פגום משאירים את מה שכבר הוגדר למעלה
-        }
+        Intent addWaterIntent = new Intent(context, HabitWidgetProvider.class);
+        addWaterIntent.setAction(ACTION_ADD_WATER);
+        PendingIntent addWaterPending = PendingIntent.getBroadcast(context, 999999, addWaterIntent, immutableFlags);
+        views.setOnClickPendingIntent(R.id.widget_water_add_button, addWaterPending);
 
         return views;
     }
