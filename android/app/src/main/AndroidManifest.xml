@@ -24,6 +24,19 @@
 
         </activity>
 
+        <receiver
+            android:name=".HabitWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.habitai.app.widget.ACTION_TOGGLE_HABIT" />
+                <action android:name="com.habitai.app.widget.ACTION_ADD_WATER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habit_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

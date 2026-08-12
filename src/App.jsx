@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Star, Flame, Zap, Medal, Rocket, Crown, CheckCircle2, Award, Trophy, Shield, Layers, Target } from 'lucide-react';
 import {
   isNativePlatform,
   requestNativeNotificationPermission,
   scheduleNativeDailyReminder
 } from './lib/nativeReminders';
+import { syncWidgetSnapshot, drainWidgetPendingActions } from './lib/nativeWidget';
 import { INITIAL_HABITS, CATEGORIES } from './constants';
 import {
   getTodayStr,
@@ -449,6 +451,50 @@ export default function App() {
   const setWaterGoal = (goal) => {
     setWaterStats(prev => ({ ...prev, goal }));
   };
+
+  // מיישם פעולה שבוצעה מהוויג'ט הנייטיבי במסך הבית בזמן שהאפליקציה לא הייתה
+  // פתוחה. הסימון קובע מצב סופי (לא toggle), כדי שהצטברות כמה פעולות ממתינות
+  // לפני שהאפליקציה נפתחת מחדש לא תיצור תוצאה שגויה.
+  const applyWidgetHabitDone = (habitId, dateStr, done) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const logs = { ...(h.logs || {}) };
+      if (done) logs[dateStr] = true; else delete logs[dateStr];
+      return { ...h, logs };
+    }));
+  };
+
+  // שואב פעולות שהצטברו מהוויג'ט (סימון הרגל / הוספת מים) - פעם אחת בטעינה,
+  // ושוב בכל פעם שהאפליקציה חוזרת לחזית, כדי שגם פעולות שבוצעו כשהאפליקציה
+  // הייתה סגורה לגמרי ייכנסו ל-state האמיתי.
+  useEffect(() => {
+    if (!isLoaded || !isNativePlatform()) return;
+
+    const applyPendingWidgetActions = async () => {
+      const actions = await drainWidgetPendingActions();
+      actions.forEach(action => {
+        if (action.type === 'toggleHabit') {
+          applyWidgetHabitDone(action.habitId, action.date, action.done);
+        } else if (action.type === 'addWater') {
+          addWaterIntake(action.amount);
+        }
+      });
+    };
+
+    applyPendingWidgetActions();
+    let listenerHandle;
+    CapacitorApp.addListener('resume', applyPendingWidgetActions).then(handle => {
+      listenerHandle = handle;
+    });
+    return () => listenerHandle?.remove();
+  }, [isLoaded]);
+
+  // מעדכן את נתוני הוויג'ט (SharedPreferences שהוויג'ט הנייטיבי קורא ישירות)
+  // בכל שינוי בהרגלים או במעקב המים, כדי שהוויג'ט במסך הבית ישקף את המצב העדכני.
+  useEffect(() => {
+    if (!isLoaded) return;
+    syncWidgetSnapshot(habits, waterStats);
+  }, [habits, waterStats, isLoaded]);
 
   const handleExportData = () => {
     const dataStr = JSON.stringify({ habits, journalEntries, waterStats }, null, 2);
