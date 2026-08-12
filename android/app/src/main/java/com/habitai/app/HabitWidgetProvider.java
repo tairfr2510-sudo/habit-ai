@@ -8,6 +8,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.StrikethroughSpan;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -38,6 +41,9 @@ public class HabitWidgetProvider extends AppWidgetProvider {
     };
     private static final int[] ICON_IDS = {
         R.id.widget_habit_icon_1, R.id.widget_habit_icon_2, R.id.widget_habit_icon_3, R.id.widget_habit_icon_4
+    };
+    private static final int[] DOT_IDS = {
+        R.id.widget_habit_dot_1, R.id.widget_habit_dot_2, R.id.widget_habit_dot_3, R.id.widget_habit_dot_4
     };
     private static final int[] TEXT_IDS = {
         R.id.widget_habit_text_1, R.id.widget_habit_text_2, R.id.widget_habit_text_3, R.id.widget_habit_text_4
@@ -160,21 +166,35 @@ public class HabitWidgetProvider extends AppWidgetProvider {
         }
     }
 
+    private static int categoryColor(Context context, String category) {
+        if ("mind".equals(category)) return context.getColor(R.color.widget_category_mind);
+        if ("productivity".equals(category)) return context.getColor(R.color.widget_category_productivity);
+        if ("social".equals(category)) return context.getColor(R.color.widget_category_social);
+        return context.getColor(R.color.widget_category_health);
+    }
+
     private static RemoteViews buildRemoteViews(Context context) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.habit_widget);
         int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
 
         Intent openAppIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+        PendingIntent openAppPending = null;
         if (openAppIntent != null) {
             openAppIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            PendingIntent openAppPending = PendingIntent.getActivity(context, 0, openAppIntent, pendingFlags);
+            openAppPending = PendingIntent.getActivity(context, 0, openAppIntent, pendingFlags);
             views.setOnClickPendingIntent(R.id.widget_header, openAppPending);
+            views.setOnClickPendingIntent(R.id.widget_more_row, openAppPending);
         }
 
         JSONObject snapshot = readSnapshot(context);
         if (snapshot == null) {
-            views.setTextViewText(R.id.widget_summary, "");
+            views.setTextViewText(R.id.widget_date, "");
+            views.setTextViewText(R.id.widget_done_count, "—");
+            views.setTextViewText(R.id.widget_streak_count, "0");
+            views.setProgressBar(R.id.widget_progress_bar, 100, 0, false);
+            views.setViewVisibility(R.id.widget_more_row, View.GONE);
             views.setTextViewText(R.id.widget_water_text, "פתחו את HabitAI כדי להתחיל");
+            views.setProgressBar(R.id.widget_water_progress_bar, 100, 0, false);
             views.setViewVisibility(R.id.widget_water_add_button, View.GONE);
             for (int rowId : ROW_IDS) {
                 views.setViewVisibility(rowId, View.GONE);
@@ -185,7 +205,12 @@ public class HabitWidgetProvider extends AppWidgetProvider {
         try {
             int total = snapshot.optInt("totalHabits", 0);
             int done = snapshot.optInt("doneHabits", 0);
-            views.setTextViewText(R.id.widget_summary, done + "/" + total + " הרגלים היום");
+            int percent = total > 0 ? Math.min(100, Math.round((done * 100f) / total)) : 0;
+
+            views.setTextViewText(R.id.widget_date, snapshot.optString("dateLabel", ""));
+            views.setTextViewText(R.id.widget_done_count, done + "/" + total);
+            views.setTextViewText(R.id.widget_streak_count, String.valueOf(snapshot.optInt("bestStreak", 0)));
+            views.setProgressBar(R.id.widget_progress_bar, 100, percent, false);
 
             JSONArray habits = snapshot.optJSONArray("habits");
             int count = habits == null ? 0 : habits.length();
@@ -197,11 +222,19 @@ public class HabitWidgetProvider extends AppWidgetProvider {
 
                 JSONObject habit = habits.getJSONObject(i);
                 String habitId = habit.optString("id");
+                String name = habit.optString("name");
                 boolean isDone = habit.optBoolean("done", false);
 
                 views.setViewVisibility(ROW_IDS[i], View.VISIBLE);
-                views.setTextViewText(TEXT_IDS[i], habit.optString("name"));
                 views.setImageViewResource(ICON_IDS[i], isDone ? R.drawable.widget_check_on : R.drawable.widget_check_off);
+                views.setInt(DOT_IDS[i], "setColorFilter", categoryColor(context, habit.optString("category")));
+
+                SpannableString label = new SpannableString(name);
+                if (isDone) {
+                    label.setSpan(new StrikethroughSpan(), 0, name.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+                views.setTextViewText(TEXT_IDS[i], label);
+                views.setTextColor(TEXT_IDS[i], isDone ? context.getColor(R.color.widget_text_muted) : context.getColor(R.color.widget_text_primary));
 
                 Intent toggleIntent = new Intent(context, HabitWidgetProvider.class);
                 toggleIntent.setAction(ACTION_TOGGLE_HABIT);
@@ -211,10 +244,20 @@ public class HabitWidgetProvider extends AppWidgetProvider {
                 views.setOnClickPendingIntent(ROW_IDS[i], togglePending);
             }
 
+            int extra = total - count;
+            if (extra > 0 && openAppPending != null) {
+                views.setViewVisibility(R.id.widget_more_row, View.VISIBLE);
+                views.setTextViewText(R.id.widget_more_row, "+" + extra + " הרגלים נוספים");
+            } else {
+                views.setViewVisibility(R.id.widget_more_row, View.GONE);
+            }
+
             JSONObject water = snapshot.optJSONObject("water");
             int waterTotal = water == null ? 0 : water.optInt("total", 0);
             int waterGoal = water == null ? 2500 : water.optInt("goal", 2500);
-            views.setTextViewText(R.id.widget_water_text, "💧 " + waterTotal + "/" + waterGoal + " מ\"ל");
+            int waterPercent = waterGoal > 0 ? Math.min(100, Math.round((waterTotal * 100f) / waterGoal)) : 0;
+            views.setTextViewText(R.id.widget_water_text, waterTotal + "/" + waterGoal + " מ\"ל");
+            views.setProgressBar(R.id.widget_water_progress_bar, 100, waterPercent, false);
             views.setViewVisibility(R.id.widget_water_add_button, View.VISIBLE);
 
             Intent addWaterIntent = new Intent(context, HabitWidgetProvider.class);

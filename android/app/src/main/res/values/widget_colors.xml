@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="widget_background">#F0F9FF</color>
-    <color name="widget_card_background">#FFFFFFCC</color>
-    <color name="widget_text_primary">#1E293B</color>
+    <color name="widget_gradient_start">#E0F2FE</color>
+    <color name="widget_gradient_end">#DBEAFE</color>
+    <color name="widget_text_primary">#0F172A</color>
     <color name="widget_text_secondary">#64748B</color>
+    <color name="widget_text_muted">#94A3B8</color>
     <color name="widget_accent">#0891B2</color>
-    <color name="widget_button_background">#0891B2</color>
+    <color name="widget_accent_light">#22D3EE</color>
     <color name="widget_button_text">#FFFFFF</color>
+    <color name="widget_progress_track">#33475569</color>
+    <color name="widget_divider">#1A64748B</color>
+    <color name="widget_streak_start">#FB923C</color>
+    <color name="widget_streak_end">#EF4444</color>
+
+    <color name="widget_category_health">#22C55E</color>
+    <color name="widget_category_mind">#3B82F6</color>
+    <color name="widget_category_productivity">#A855F7</color>
+    <color name="widget_category_social">#EC4899</color>
 </resources>

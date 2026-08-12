@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_gradient_start">#0F172A</color>
+    <color name="widget_gradient_end">#164E63</color>
+    <color name="widget_text_primary">#F1F5F9</color>
+    <color name="widget_text_secondary">#94A3B8</color>
+    <color name="widget_text_muted">#64748B</color>
+    <color name="widget_accent">#22D3EE</color>
+    <color name="widget_accent_light">#67E8F9</color>
+    <color name="widget_button_text">#0F172A</color>
+    <color name="widget_progress_track">#33CBD5E1</color>
+    <color name="widget_divider">#26FFFFFF</color>
+    <color name="widget_streak_start">#FB923C</color>
+    <color name="widget_streak_end">#EF4444</color>
+
+    <color name="widget_category_health">#4ADE80</color>
+    <color name="widget_category_mind">#60A5FA</color>
+    <color name="widget_category_productivity">#C084FC</color>
+    <color name="widget_category_social">#F472B6</color>
+</resources>

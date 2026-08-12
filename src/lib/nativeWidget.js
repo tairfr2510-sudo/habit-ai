@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import { getTodayStr, isHabitScheduledOnDate } from '../utils/habitUtils';
+import { getTodayStr, isHabitScheduledOnDate, calculateStreak, formatDateToHebrew } from '../utils/habitUtils';
 
 // פלאגין נייטיבי קטן (נכתב בפרויקט האנדרואיד עצמו, ראה HabitWidgetPlugin.java) שמבקש
 // מהוויג'ט להתרענן מיידית אחרי כתיבת snapshot חדש - בלי זה הוויג'ט מתעדכן רק
@@ -27,16 +27,20 @@ export async function syncWidgetSnapshot(habits, waterStats) {
   const widgetHabits = dueHabits.slice(0, MAX_WIDGET_HABITS).map(h => ({
     id: h.id,
     name: h.name,
+    category: h.category || 'health',
     done: !!(h.logs && h.logs[today])
   }));
 
+  const bestStreak = dueHabits.reduce((max, h) => Math.max(max, calculateStreak(h)), 0);
   const waterTotal = (waterStats?.entries?.[today] || []).reduce((sum, e) => sum + e.amount, 0);
 
   const snapshot = {
     date: today,
+    dateLabel: formatDateToHebrew(today),
     habits: widgetHabits,
     totalHabits: dueHabits.length,
     doneHabits: dueHabits.filter(h => h.logs && h.logs[today]).length,
+    bestStreak,
     water: { total: waterTotal, goal: Number(waterStats?.goal) || 2500 }
   };
 
