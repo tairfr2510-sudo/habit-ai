@@ -22,15 +22,24 @@ export async function requestNativeNotificationPermission() {
 // מכילה את התמונה העדכנית ביותר שהייתה זמינה. המשמעות: התזכורת תישאר מדויקת כל
 // עוד האפליקציה נפתחת מדי פעם באותו יום; אם היא לא נפתחת בכלל, לא תתוזמן תזכורת
 // חדשה עד שהיא תיפתח שוב.
-export async function scheduleNativeDailyReminder(reminderTime, message) {
-  const [hourStr, minuteStr] = reminderTime.split(':');
+// מחזיר את המועד הבא של שעת התזכורת - היום אם השעה עוד לא עברה, אחרת מחר.
+// התוכן של התזכורת צריך להיבנות לפי התאריך הזה (ולא לפי היום), אחרת תזכורת
+// של מחר תציג את מה שנשאר היום.
+export function getNextReminderDate(reminderTime) {
+  const [hourStr, minuteStr] = (reminderTime || '').split(':');
   const hour = parseInt(hourStr, 10);
   const minute = parseInt(minuteStr, 10);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return;
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
 
   const next = new Date();
   next.setHours(hour, minute, 0, 0);
   if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+export async function scheduleNativeDailyReminder(reminderTime, message) {
+  const next = getNextReminderDate(reminderTime);
+  if (!next) return;
 
   await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
   await LocalNotifications.schedule({

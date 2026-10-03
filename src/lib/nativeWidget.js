@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import { getTodayStr, isHabitScheduledOnDate, calculateDailyStreak, formatDateToHebrew } from '../utils/habitUtils';
+import { getTodayStr, isHabitDueOnDate, calculateDailyStreak, formatDateToHebrew } from '../utils/habitUtils';
 
 // פלאגין נייטיבי קטן (נכתב בפרויקט האנדרואיד עצמו, ראה HabitWidgetPlugin.java) שמבקש
 // מהוויג'ט להתרענן מיידית אחרי כתיבת snapshot חדש - בלי זה הוויג'ט מתעדכן רק
@@ -21,10 +21,8 @@ export async function syncWidgetSnapshot(habits, waterStats, streakExemptions) {
   if (!isNativePlatform()) return;
   const today = getTodayStr();
 
-  const dueHabits = (habits || []).filter(h => {
-    const freqType = h.frequency?.type || h.frequency;
-    return freqType === 'weekly' || isHabitScheduledOnDate(h, today);
-  });
+  // הרגל שבועי שכבר השיג את היעד השבועי (ולא סומן היום) לא מוצג - בדיוק כמו בתזכורות
+  const dueHabits = (habits || []).filter(h => isHabitDueOnDate(h, today));
 
   const widgetHabits = dueHabits.slice(0, MAX_WIDGET_HABITS).map(h => ({
     id: h.id,

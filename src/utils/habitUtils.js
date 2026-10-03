@@ -1,4 +1,4 @@
-const formatDateToInput = (date) => {
+export const formatDateToInput = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -56,17 +56,32 @@ export const getScheduleLabel = (habit) => {
   return 'כל יום';
 };
 
-export const getCompletionsThisWeek = (logs) => {
-  const today = new Date();
-  const currentDay = today.getDay();
+// כמה פעמים ההרגל בוצע בשבוע (א'-ש') של התאריך הנתון, עד אותו תאריך כולל.
+// ברירת המחדל היא היום.
+export const getCompletionsThisWeek = (logs, refDateStr = getTodayStr()) => {
+  const ref = new Date(`${refDateStr}T12:00:00`);
+  const currentDay = ref.getDay();
   let count = 0;
   for (let i = 0; i <= currentDay; i++) {
-    const d = new Date(today);
+    const d = new Date(ref);
     d.setDate(d.getDate() - i);
     const dateStr = formatDateToInput(d);
     if (logs && logs[dateStr]) count++;
   }
   return count;
+};
+
+// האם ההרגל "פתוח" בתאריך נתון - כלומר צריך להופיע ברשימת המשימות של אותו
+// יום (ויג'ט, תזכורות). הרגל שבועי פתוח כל עוד היעד השבועי עוד לא הושג, או
+// אם הוא כבר סומן באותו יום (כדי שיופיע כ"בוצע" ולא ייעלם). מקור אמת יחיד -
+// כדי שהרגל שבועי שהשיג את היעד לא ייחשב "הושלם" במקום אחד ו"לא בוצע" באחר.
+export const isHabitDueOnDate = (habit, dateStr) => {
+  const freqType = habit?.frequency?.type || (typeof habit?.frequency === 'string' ? habit.frequency : 'daily');
+  if (freqType === 'weekly') {
+    if (habit.logs && habit.logs[dateStr]) return true;
+    return getCompletionsThisWeek(habit.logs, dateStr) < (habit.frequency?.target || 7);
+  }
+  return isHabitScheduledOnDate(habit, dateStr);
 };
 
 // אחוז ההרגלים שהושלמו בתאריך נתון - משמש לציר הזמן ביומן היומי, כדי להציג
@@ -89,14 +104,7 @@ export const getCompletionRateForDate = (habits, dateStr) => {
 // בתאריך נתון - משמש גם להתראת הדפדפן וגם לתזכורת המתוזמנת באפליקציה הנייטיבית,
 // כדי ששתיהן ירשמו את שמות ההרגלים הספציפיים שנשארו במקום הודעה גנרית.
 export const getReminderMessage = (habits, dateStr) => {
-  const uncompleted = habits.filter(h => {
-    const freqType = h.frequency?.type || h.frequency;
-    if (freqType === 'weekly') {
-      const target = h.frequency?.target || 7;
-      return getCompletionsThisWeek(h.logs) < target && (!h.logs || !h.logs[dateStr]);
-    }
-    return isHabitScheduledOnDate(h, dateStr) && (!h.logs || !h.logs[dateStr]);
-  });
+  const uncompleted = habits.filter(h => isHabitDueOnDate(h, dateStr) && (!h.logs || !h.logs[dateStr]));
 
   if (uncompleted.length > 0) {
     return {

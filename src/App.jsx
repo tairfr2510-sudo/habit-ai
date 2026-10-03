@@ -4,12 +4,14 @@ import { Star, Flame, Zap, Medal, Rocket, Crown, CheckCircle2, Award, Trophy, Sh
 import {
   isNativePlatform,
   requestNativeNotificationPermission,
-  scheduleNativeDailyReminder
+  scheduleNativeDailyReminder,
+  getNextReminderDate
 } from './lib/nativeReminders';
 import { syncWidgetSnapshot, drainWidgetPendingActions } from './lib/nativeWidget';
 import { INITIAL_HABITS, CATEGORIES } from './constants';
 import {
   getTodayStr,
+  formatDateToInput,
   getLastNDays,
   formatDateToHebrew,
   getCompletionsThisWeek,
@@ -18,6 +20,7 @@ import {
   countFreeDaysInMonth,
   FREE_DAYS_PER_MONTH,
   isHabitScheduledOnDate,
+  isHabitDueOnDate,
   getScheduleLabel,
   getReminderMessage
 } from './utils/habitUtils';
@@ -242,7 +245,10 @@ export default function App() {
   // הושלמו בכל פעם שמסמנים/מוסיפים/מוחקים הרגל, כדי שהתוכן שיגיע בפועל יהיה עדכני.
   useEffect(() => {
     if (!isNativePlatform() || !browserNotifyEnabled) return;
-    const message = getReminderMessage(habits, getTodayStr());
+    const fireDate = getNextReminderDate(reminderTime);
+    if (!fireDate) return;
+    // התוכן נבנה לפי היום שבו התזכורת תופיע בפועל (מחר, אם השעה כבר עברה היום)
+    const message = getReminderMessage(habits, formatDateToInput(fireDate));
     scheduleNativeDailyReminder(reminderTime, message);
   }, [browserNotifyEnabled, reminderTime, habits]);
 
@@ -643,14 +649,17 @@ export default function App() {
         שם: h.name,
         קטגוריה: category,
         לוח_זמנים: getScheduleLabel(h),
-        רצף_נוכחי: calculateStreak(h),
         סטטוס_היום: h.logs?.[todayStr]
           ? 'בוצע'
-          : (freqType === 'weekly' || isHabitScheduledOnDate(h, todayStr) ? 'עוד לא בוצע' : 'לא מתוכנן להיום')
+          : isHabitDueOnDate(h, todayStr)
+            ? 'עוד לא בוצע'
+            : (freqType === 'weekly' ? 'היעד השבועי כבר הושג' : 'לא מתוכנן להיום')
       };
       if (freqType === 'weekly') {
         base.השלמות_השבוע = `${getCompletionsThisWeek(h.logs)}/${h.frequency?.target || 7}`;
       } else {
+        // רצף ימים רצוף רלוונטי רק להרגלים עם ימים קבועים - בהרגל שבועי הוא חסר משמעות
+        base.רצף_נוכחי = calculateStreak(h);
         const scheduledDays = last14Days.filter(d => isHabitScheduledOnDate(h, d));
         const completedDays = scheduledDays.filter(d => h.logs && h.logs[d]);
         base['אחוז_עמידה_14_ימים_אחרונים'] = scheduledDays.length > 0

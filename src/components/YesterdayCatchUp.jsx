@@ -1,19 +1,18 @@
 import { useState } from 'react';
 import { History, CheckCircle, Circle, ChevronDown } from 'lucide-react';
-import { getLastNDays, formatDateToHebrew, isHabitScheduledOnDate } from '../utils/habitUtils';
+import { getLastNDays, formatDateToHebrew, isHabitDueOnDate } from '../utils/habitUtils';
 
 // כרטיס "שכחת לסמן אתמול?": מאפשר לסמן בדיעבד הרגלים שבוצעו אתמול. מציג
 // הרגלים יומיים / "ימים נבחרים" שהיו מתוכננים לאתמול, וגם הרגלים שבועיים
-// (שאין להם יום קבוע). מקופל כברירת מחדל ומציג כמה עוד לא סומנו.
+// שהיעד השבועי שלהם עוד לא הושג עד אתמול. מקופל כברירת מחדל ומציג כמה עוד לא סומנו.
 export default function YesterdayCatchUp({ habits, onToggleHabit }) {
   const yesterday = getLastNDays(2)[0];
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const relevant = habits.filter(h => {
-    const freqType = h.frequency?.type || h.frequency;
     // הרגל שנוצר רק היום לא היה קיים אתמול
     if (h.createdAt && new Date(h.createdAt) >= startOfToday && !h.logs?.[yesterday]) return false;
-    return freqType === 'weekly' || isHabitScheduledOnDate(h, yesterday);
+    return isHabitDueOnDate(h, yesterday);
   });
   const missingCount = relevant.filter(h => !h.logs?.[yesterday]).length;
   const [open, setOpen] = useState(false);
