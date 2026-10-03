@@ -1,5 +1,11 @@
 {
   "appId": "com.habitai.app",
   "appName": "HabitAI",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
 }

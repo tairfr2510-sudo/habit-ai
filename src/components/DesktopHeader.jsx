@@ -1,6 +1,7 @@
 import { Flame } from 'lucide-react';
 import { calculateDailyStreak, calculateWeeklyStreak } from '../utils/habitUtils';
 import NotificationBell from './NotificationBell';
+import CloudSyncButton from './CloudSyncButton';
 
 export default function DesktopHeader({
   habits,
@@ -9,7 +10,8 @@ export default function DesktopHeader({
   unreadCount,
   showNotificationsPanel,
   toggleNotificationsPanel,
-  closeNotificationsPanel
+  closeNotificationsPanel,
+  cloudSync
 }) {
   const dailyStreak = calculateDailyStreak(habits, streakExemptions);
   const weeklyStreak = calculateWeeklyStreak(habits, streakExemptions);
@@ -23,6 +25,7 @@ export default function DesktopHeader({
          <span>רצף שבועי:</span>
          <span className="text-orange-500 font-bold flex items-center">{weeklyStreak} <Flame size={16} className="ml-1"/></span>
        </div>
+       <CloudSyncButton cloudSync={cloudSync} size="md" />
        <NotificationBell
          notifications={notifications}
          unreadCount={unreadCount}

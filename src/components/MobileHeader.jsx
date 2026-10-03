@@ -1,5 +1,6 @@
 import { BrainCircuit, Moon, Sun, Star } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import CloudSyncButton from './CloudSyncButton';
 
 export default function MobileHeader({
   isDarkMode,
@@ -9,7 +10,8 @@ export default function MobileHeader({
   unreadCount,
   showNotificationsPanel,
   toggleNotificationsPanel,
-  closeNotificationsPanel
+  closeNotificationsPanel,
+  cloudSync
 }) {
   return (
     <header className="mb-6 md:hidden flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
@@ -17,6 +19,7 @@ export default function MobileHeader({
          <BrainCircuit size={28} /><span>HabitAI</span>
        </div>
        <div className="flex items-center gap-3">
+         <CloudSyncButton cloudSync={cloudSync} size="sm" />
          <button onClick={() => setIsDarkMode(!isDarkMode)} className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1">
            {isDarkMode ? <Sun size={22}/> : <Moon size={22}/>}
          </button>

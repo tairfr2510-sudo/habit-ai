@@ -32,6 +32,8 @@ import ManageHabits from './components/ManageHabits';
 import Analytics from './components/Analytics';
 import DailyJournal from './components/DailyJournal';
 import WaterTracker from './components/WaterTracker';
+import SyncConflictModal from './components/SyncConflictModal';
+import { useCloudSync } from './lib/useCloudSync';
 
 export default function App() {
   const [habits, setHabits] = useState([]);
@@ -772,6 +774,14 @@ export default function App() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // סנכרון לענן בין הטלפון למחשב (הגדרות והתראות נשארות מקומיות לכל מכשיר)
+  const cloudSync = useCloudSync({
+    isLoaded,
+    values: { habits, journal: journalEntries, water: waterStats, exemptions: streakExemptions },
+    setters: { habits: setHabits, journal: setJournalEntries, water: setWaterStats, exemptions: setStreakExemptions },
+    showToast
+  });
+
   if (!isLoaded) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4"><div className="animate-spin rounded-full h-14 w-14 border-4 border-slate-200 border-t-indigo-600"></div><p className="text-slate-500 font-medium animate-pulse">טוען את המידע שלך...</p></div>;
 
   return (
@@ -781,6 +791,11 @@ export default function App() {
         <Toast message={toastMessage} />
         <NoteModal activeNoteModal={activeNoteModal} setActiveNoteModal={setActiveNoteModal} saveNote={saveNote} />
         <CelebrationOverlay show={showCelebration} />
+        <SyncConflictModal
+          conflict={cloudSync.conflict}
+          localHabitsCount={habits.length}
+          onResolve={cloudSync.resolveConflict}
+        />
 
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row min-h-screen relative z-10">
 
@@ -803,9 +818,11 @@ export default function App() {
               showNotificationsPanel={showNotificationsPanel}
               toggleNotificationsPanel={toggleNotificationsPanel}
               closeNotificationsPanel={closeNotificationsPanel}
+              cloudSync={cloudSync}
             />
 
             <DesktopHeader
+              cloudSync={cloudSync}
               habits={habits}
               streakExemptions={streakExemptions}
               notifications={notifications}
