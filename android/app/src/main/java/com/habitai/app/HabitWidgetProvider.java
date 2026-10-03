@@ -36,7 +36,7 @@ public class HabitWidgetProvider extends AppWidgetProvider {
 
     static final String ACTION_TOGGLE_HABIT = "com.habitai.app.widget.ACTION_TOGGLE_HABIT";
     static final String ACTION_ADD_WATER = "com.habitai.app.widget.ACTION_ADD_WATER";
-    private static final int WATER_QUICK_ADD_ML = 250;
+    private static final int WATER_QUICK_ADD_ML = 750;
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {

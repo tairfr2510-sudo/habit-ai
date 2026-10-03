@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import { getTodayStr, isHabitScheduledOnDate, calculateStreak, formatDateToHebrew } from '../utils/habitUtils';
+import { getTodayStr, isHabitScheduledOnDate, calculateDailyStreak, formatDateToHebrew } from '../utils/habitUtils';
 
 // פלאגין נייטיבי קטן (נכתב בפרויקט האנדרואיד עצמו, ראה HabitWidgetPlugin.java) שמבקש
 // מהוויג'ט להתרענן מיידית אחרי כתיבת snapshot חדש - בלי זה הוויג'ט מתעדכן רק
@@ -17,7 +17,7 @@ export const isNativePlatform = () => Capacitor.isNativePlatform();
 
 // כותב לנתונים שהוויג'ט הנייטיבי קורא ישירות (דרך SharedPreferences של @capacitor/preferences),
 // ומבקש רענון מיידי. נקרא בכל שינוי ב-habits/waterStats.
-export async function syncWidgetSnapshot(habits, waterStats) {
+export async function syncWidgetSnapshot(habits, waterStats, streakExemptions) {
   if (!isNativePlatform()) return;
   const today = getTodayStr();
 
@@ -33,7 +33,7 @@ export async function syncWidgetSnapshot(habits, waterStats) {
     done: !!(h.logs && h.logs[today])
   }));
 
-  const bestStreak = dueHabits.reduce((max, h) => Math.max(max, calculateStreak(h)), 0);
+  const bestStreak = calculateDailyStreak(habits, streakExemptions);
   const waterTotal = (waterStats?.entries?.[today] || []).reduce((sum, e) => sum + e.amount, 0);
 
   const snapshot = {

@@ -14,6 +14,9 @@ import {
   formatDateToHebrew,
   getCompletionsThisWeek,
   calculateStreak,
+  calculateDailyStreak,
+  countFreeDaysInMonth,
+  FREE_DAYS_PER_MONTH,
   isHabitScheduledOnDate,
   getScheduleLabel,
   getReminderMessage
@@ -69,6 +72,8 @@ export default function App() {
   // יומן יומי ומעקב מצב רוח
   const [journalEntries, setJournalEntries] = useState({}); // { [dateStr]: { mood, text, updatedAt } }
   const [waterStats, setWaterStats] = useState({ goal: 2500, entries: {} });
+  // ימים מוגנים ברצף - ראה isDateExempt ב-habitUtils
+  const [streakExemptions, setStreakExemptions] = useState({});
 
   useEffect(() => {
     const savedHabits = localStorage.getItem('habitTracker_data_v3');
@@ -124,6 +129,15 @@ export default function App() {
       }
     }
 
+    const savedExemptions = localStorage.getItem('habitTracker_streak_exemptions_v1');
+    if (savedExemptions) {
+      try {
+        setStreakExemptions(JSON.parse(savedExemptions));
+      } catch (e) {
+        console.warn('לא ניתן לטעון את ימי הרצף המוגנים.', e);
+      }
+    }
+
     setIsLoaded(true);
   }, []);
 
@@ -161,6 +175,12 @@ export default function App() {
       localStorage.setItem('habitTracker_water_v1', JSON.stringify(waterStats));
     }
   }, [waterStats, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('habitTracker_streak_exemptions_v1', JSON.stringify(streakExemptions));
+    }
+  }, [streakExemptions, isLoaded]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -493,11 +513,11 @@ export default function App() {
   // בכל שינוי בהרגלים או במעקב המים, כדי שהוויג'ט במסך הבית ישקף את המצב העדכני.
   useEffect(() => {
     if (!isLoaded) return;
-    syncWidgetSnapshot(habits, waterStats);
-  }, [habits, waterStats, isLoaded]);
+    syncWidgetSnapshot(habits, waterStats, streakExemptions);
+  }, [habits, waterStats, streakExemptions, isLoaded]);
 
   const handleExportData = () => {
-    const dataStr = JSON.stringify({ habits, journalEntries, waterStats }, null, 2);
+    const dataStr = JSON.stringify({ habits, journalEntries, waterStats, streakExemptions }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const exportFileDefaultName = `habitAI_backup_${getTodayStr()}.json`;
     const linkElement = document.createElement('a');
@@ -527,6 +547,7 @@ export default function App() {
               entries: importedData.waterStats.entries || {}
             });
           }
+          setStreakExemptions(importedData.streakExemptions || {});
           showToast("הנתונים שוחזרו בהצלחה!");
         } else {
           showToast("קובץ הגיבוי אינו תקין.");
@@ -570,7 +591,7 @@ export default function App() {
 
   const earnedBadges = useMemo(() => {
     const badges = [];
-    const maxStreak = habits.length > 0 ? Math.max(0, ...habits.map(h => calculateStreak(h))) : 0;
+    const maxStreak = calculateDailyStreak(habits, streakExemptions);
     const totalCompletions = habits.reduce((sum, h) => sum + Object.values(h.logs || {}).filter(Boolean).length, 0);
     const categoriesUsed = new Set(habits.map(h => h.category)).size;
     const weeklyGoalMetNow = habits.some(h => {
@@ -592,7 +613,7 @@ export default function App() {
     if (weeklyGoalMetNow) badges.push({ id: 12, name: 'יעד שבועי הושג', desc: 'עמדת ביעד שבועי של הרגל השבוע', icon: Target, color: 'text-rose-600 bg-rose-100 border-rose-200 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-700' });
 
     return badges;
-  }, [habits, userStats]);
+  }, [habits, userStats, streakExemptions]);
 
   // קריאה ישירה ל-Gemini מהצד לקוח, עם מפתח שנקרא מ-VITE_GEMINI_API_KEY (מוגדר ב-.env.local).
   // המפתח נצרב בתוך חבילת ה-JS (כולל בתוך ה-APK), ולכן חשוף עקרונית למי שיפרק את האפליקציה.
@@ -612,6 +633,7 @@ export default function App() {
     // לניתוח (רצפים, אחוזי עמידה בלוח הזמנים), בלי לחשוף את תוכן הפתקים האישיים
     // ובלי "לבזבז" הקשר על שדות פנימיים כמו id/createdAt.
     const last14Days = getLastNDays(14);
+    const todayStr = getTodayStr();
     const habitsSummary = habits.map(h => {
       const freqType = h.frequency?.type || (typeof h.frequency === 'string' ? h.frequency : 'daily');
       const category = CATEGORIES.find(c => c.id === h.category)?.name || h.category;
@@ -619,7 +641,10 @@ export default function App() {
         שם: h.name,
         קטגוריה: category,
         לוח_זמנים: getScheduleLabel(h),
-        רצף_נוכחי: calculateStreak(h)
+        רצף_נוכחי: calculateStreak(h),
+        סטטוס_היום: h.logs?.[todayStr]
+          ? 'בוצע'
+          : (freqType === 'weekly' || isHabitScheduledOnDate(h, todayStr) ? 'עוד לא בוצע' : 'לא מתוכנן להיום')
       };
       if (freqType === 'weekly') {
         base.השלמות_השבוע = `${getCompletionsThisWeek(h.logs)}/${h.frequency?.target || 7}`;
@@ -636,10 +661,12 @@ export default function App() {
     const prompt = `
       הנה סיכום ביצועי ההרגלים שלי (JSON): ${JSON.stringify(habitsSummary)}
 
-      זו הודעת בוקר קצרה שאני קורא כל יום מהמאמן האישי שלי. בהתבסס אך ורק על הנתונים האלה, כתוב לי בדיוק שני משפטים קצרים וישירים, בלי כותרות, בלי רשימות, בלי מבוא:
-      משפט 1: מוטיבציה ממוקדת בהישג ספציפי מהנתונים (רצף מסוים, אחוז עמידה גבוה וכו') - לא מחמאה כללית.
-      משפט 2: הדבר האחד הכי חשוב לשפר היום, מבוסס על ההרגל שהכי מפגר בנתונים, עם טיפ מעשי קונקרטי ליישום מיידי.
-      תכל'ס, בלי פילוסופיה, בלי מילים מיותרות.
+      דבר אליי כמו המאמן האישי שלי שמכיר אותי ורוצה שאצליח. כתוב הודעה אחת קצרה (3-4 משפטים), בגוף שני, בלי כותרות, בלי רשימות ובלי אימוג'ים מוגזמים (מקסימום אחד):
+      1. תפתח בהכרה אמיתית בהתקדמות שלי - הישג ספציפי מהנתונים (רצף, אחוז עמידה, הרגל שהשתפר), ותגיד למה זה משמעותי.
+      2. תצביע בכנות על ההרגל שהכי מתקשה, בלי להאשים - כמו מאמן שמאמין בי ויודע שאני מסוגל ליותר.
+      3. תן לי צעד אחד קטן וקונקרטי לעשות היום כדי להתקדם בו (מתי, איך, כמה זמן) - משהו שקל להתחיל ממנו עכשיו. אם יש הרגלים שעוד לא בוצעו היום, התמקד בהם.
+      4. סיים במשפט קצר שנותן לי דחיפה לצאת לדרך.
+      הכל מבוסס אך ורק על הנתונים. חם ותומך, אבל ישיר ותכל'ס - בלי קלישאות ובלי פילוסופיה.
     `;
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
@@ -649,7 +676,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: "אתה מאמן אישי (habit coach) תכליתי שכותב הודעות בוקר קצרות בעברית טבעית. אתה תמיד מתבסס רק על הנתונים שסופקו לך ולעולם לא ממציא פרטים שלא נמצאים בהם. אתה כותב קצר וממוקד - בלי הקדמות, בלי מליצות, בלי חזרות מיותרות. הטון שלך אנרגטי, ישיר וממוקד פעולה, לא מתרפס ולא מגזים בשבחים." }] }
+          systemInstruction: { parts: [{ text: "אתה מאמן אישי להרגלים שמלווה את המתאמן שלך יום-יום, כותב בעברית טבעית ומדבר אליו ישירות בגוף שני, כמו מאמן שמכיר אותו אישית. אתה חם, מעודד ומאמין ביכולת שלו, אבל גם כן וישיר - כשמשהו לא עובד אתה אומר את זה ועוזר למצוא דרך קטנה ומעשית לשפר. אתה חוגג הצלחות ספציפיות ולא מחמיא סתם, ואת העצות שלך אפשר ליישם עוד היום. אתה מתבסס רק על הנתונים שסופקו לך ולעולם לא ממציא פרטים שלא נמצאים בהם." }] }
         })
       });
       const data = await response.json();
@@ -663,6 +690,83 @@ export default function App() {
       setAiInsight("שגיאה בתקשורת עם מאמן ה-AI.");
     } finally {
       setIsAiLoading(false);
+    }
+  };
+
+  const applyFreeDay = (dateStr) => {
+    if (countFreeDaysInMonth(streakExemptions, dateStr) >= FREE_DAYS_PER_MONTH) {
+      showToast(`ניצלת כבר ${FREE_DAYS_PER_MONTH} ימי חופש בחודש הזה.`);
+      return;
+    }
+    setStreakExemptions(prev => ({
+      ...prev,
+      // שומרים תירוץ שנדחה כדי שהסרת יום החופש לא תאפשר לשלוח אותו שוב
+      [dateStr]: { type: 'freeze', createdAt: new Date().toISOString(), rejectedExcuse: prev[dateStr]?.type === 'rejected' ? prev[dateStr] : prev[dateStr]?.rejectedExcuse }
+    }));
+    showToast('יום החופש נוצל - הרצף שמור 🛡️');
+  };
+
+  const removeExemption = (dateStr) => {
+    setStreakExemptions(prev => {
+      const next = { ...prev };
+      if (prev[dateStr]?.rejectedExcuse) next[dateStr] = prev[dateStr].rejectedExcuse;
+      else delete next[dateStr];
+      return next;
+    });
+  };
+
+  // שולח תירוץ ל-Gemini שמחליט אם הוא מצדיק הגנה על הרצף. מחזיר { approved, reply }
+  // או { error } - ה-state מתעדכן כאן בכל מקרה של החלטה (אישור או דחייה).
+  const submitStreakExcuse = async (dateStr, excuseText) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) return { error: 'לא נמצא מפתח API של Gemini.' };
+
+    const missedHabits = habits
+      .filter(h => (h.frequency?.type || h.frequency) !== 'weekly' && isHabitScheduledOnDate(h, dateStr) && !(h.logs && h.logs[dateStr]))
+      .map(h => h.name);
+
+    const prompt = `
+      תאריך: ${dateStr} (${formatDateToHebrew(dateStr)})
+      הרגלים שלא בוצעו באותו יום: ${missedHabits.length > 0 ? missedHabits.join(', ') : 'לא צוין'}
+      התירוץ של המשתמש: """${excuseText}"""
+
+      החלט אם התירוץ מצדיק לשמור על רצף ההרגלים שלו למרות שלא עמד ביעד באותו יום.
+      החזר JSON בלבד בפורמט: {"approved": true/false, "reply": "משפט אחד או שניים בעברית"}
+    `;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+    // המודל מחזיר לפעמים 503 (עומס) - מנסים שוב עד פעמיים לפני שמוותרים
+    const fetchWithRetry = async (options) => {
+      for (let attempt = 0; ; attempt++) {
+        const response = await fetch(apiUrl, options);
+        if (response.status !== 503 || attempt >= 2) return response;
+        await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)));
+      }
+    };
+
+    try {
+      const response = await fetchWithRetry({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: "אתה שופט הוגן אבל קפדן של תירוצים באפליקציית הרגלים. אתה מאשר רק סיבות אמיתיות שמנעו באופן סביר את ביצוע ההרגלים: מחלה או פציעה, חג או מועד דתי, אבל או אירוע משפחתי משמעותי, מקרה חירום, אשפוז, מילואים, טיסה או נסיעה ארוכה שמנעה ביצוע. אתה דוחה עצלות, עייפות רגילה, שכחה, 'לא היה לי כוח', 'הייתי עסוק' בלי פירוט, בילויים, ותירוצים מעורפלים או לא רציניים. כשאתה מאשר - תכתוב משהו תומך וקצר. כשאתה דוחה - תסביר בקצרה למה ותעודד לחזור לשגרה, בלי להטיף. תמיד תענה ב-JSON בלבד." }] },
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const verdict = JSON.parse(text);
+      if (typeof verdict?.approved !== 'boolean') throw new Error('bad verdict');
+
+      const reply = String(verdict.reply || '');
+      setStreakExemptions(prev => ({
+        ...prev,
+        [dateStr]: { type: verdict.approved ? 'excuse' : 'rejected', reason: excuseText, aiReply: reply, createdAt: new Date().toISOString() }
+      }));
+      return { approved: verdict.approved, reply };
+    } catch {
+      return { error: 'לא הצלחתי לקבל תשובה מה-AI. נסה שוב מאוחר יותר.' };
     }
   };
 
@@ -703,6 +807,7 @@ export default function App() {
 
             <DesktopHeader
               habits={habits}
+              streakExemptions={streakExemptions}
               notifications={notifications}
               unreadCount={unreadCount}
               showNotificationsPanel={showNotificationsPanel}
@@ -721,6 +826,10 @@ export default function App() {
                   setActiveTab={setActiveTab}
                   onToggleHabit={toggleHabit}
                   onOpenNote={setActiveNoteModal}
+                  streakExemptions={streakExemptions}
+                  applyFreeDay={applyFreeDay}
+                  removeExemption={removeExemption}
+                  submitStreakExcuse={submitStreakExcuse}
                 />
               )}
               {activeTab === 'journal' && (
@@ -777,6 +886,7 @@ export default function App() {
                   userStats={userStats}
                   statsData={statsData}
                   heatmapData={heatmapData}
+                  streakExemptions={streakExemptions}
                   earnedBadges={earnedBadges}
                   isDarkMode={isDarkMode}
                 />

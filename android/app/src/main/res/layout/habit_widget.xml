@@ -183,7 +183,7 @@
             android:paddingEnd="12dp"
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
-            android:text="+250 מ&quot;ל"
+            android:text="+750 מ&quot;ל"
             android:textColor="@color/widget_button_text"
             android:textStyle="bold"
             android:textSize="12sp" />

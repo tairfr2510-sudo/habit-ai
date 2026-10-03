@@ -1,6 +1,8 @@
 import { Target, Sparkles, Trophy, Star, CalendarDays, Plus, BrainCircuit, Activity } from 'lucide-react';
 import { getTodayStr, getCompletionsThisWeek, formatDateToHebrew, isHabitScheduledOnDate, getScheduleLabel } from '../utils/habitUtils';
 import HabitCard from './HabitCard';
+import StreakProtection from './StreakProtection';
+import YesterdayCatchUp from './YesterdayCatchUp';
 
 export default function Dashboard({
   habits,
@@ -10,7 +12,11 @@ export default function Dashboard({
   fetchAIInsight,
   setActiveTab,
   onToggleHabit,
-  onOpenNote
+  onOpenNote,
+  streakExemptions,
+  applyFreeDay,
+  removeExemption,
+  submitStreakExcuse
 }) {
   const today = getTodayStr();
 
@@ -151,6 +157,8 @@ export default function Dashboard({
         </div>
       </div>
 
+      <YesterdayCatchUp habits={habits} onToggleHabit={onToggleHabit} />
+
       <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-3xl p-6 sm:p-8 border-2 border-indigo-100/50 dark:border-indigo-500/20 shadow-sm relative overflow-hidden transition-colors">
         <div className="absolute top-0 left-0 w-32 h-32 bg-purple-200 dark:bg-purple-600/30 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob"></div>
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-200 dark:bg-indigo-600/30 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob animation-delay-2000"></div>
@@ -175,6 +183,14 @@ export default function Dashboard({
           )}
         </div>
       </div>
+
+      <StreakProtection
+        habits={habits}
+        streakExemptions={streakExemptions}
+        applyFreeDay={applyFreeDay}
+        removeExemption={removeExemption}
+        submitStreakExcuse={submitStreakExcuse}
+      />
     </div>
   );
 }
