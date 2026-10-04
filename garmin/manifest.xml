@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- id חייב להתאים ל-WATCH_APP_ID ב-android/.../GarminBridge.java (שם עם מקפים) -->
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application id="d0a31b02014c44d0b79f9abe45e201d8" type="widget" name="@Strings.AppName" entry="HabitApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
+        <iq:products>
+            <iq:product id="fr265"/>
+            <iq:product id="fr265s"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>heb</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>

@@ -7,7 +7,7 @@ import {
   scheduleNativeDailyReminder,
   getNextReminderDate
 } from './lib/nativeReminders';
-import { syncWidgetSnapshot, drainWidgetPendingActions } from './lib/nativeWidget';
+import { syncWidgetSnapshot, drainWidgetPendingActions, onWidgetPendingActions } from './lib/nativeWidget';
 import { INITIAL_HABITS, CATEGORIES } from './constants';
 import {
   getTodayStr,
@@ -492,7 +492,7 @@ export default function App() {
     }));
   };
 
-  // שואב פעולות שהצטברו מהוויג'ט (סימון הרגל / הוספת מים) - פעם אחת בטעינה,
+  // שואב פעולות שהצטברו מהוויג'ט / מהשעון (סימון הרגל / הוספת מים) - פעם אחת בטעינה,
   // ושוב בכל פעם שהאפליקציה חוזרת לחזית, כדי שגם פעולות שבוצעו כשהאפליקציה
   // הייתה סגורה לגמרי ייכנסו ל-state האמיתי.
   useEffect(() => {
@@ -510,11 +510,12 @@ export default function App() {
     };
 
     applyPendingWidgetActions();
-    let listenerHandle;
-    CapacitorApp.addListener('resume', applyPendingWidgetActions).then(handle => {
-      listenerHandle = handle;
-    });
-    return () => listenerHandle?.remove();
+    // גם בחזרה לחזית, וגם מיד כשמגיע סימון מהשעון בזמן שהאפליקציה פתוחה
+    const handles = [
+      CapacitorApp.addListener('resume', applyPendingWidgetActions),
+      onWidgetPendingActions(applyPendingWidgetActions)
+    ];
+    return () => handles.forEach(h => h.then(handle => handle.remove()));
   }, [isLoaded]);
 
   // מעדכן את נתוני הוויג'ט (SharedPreferences שהוויג'ט הנייטיבי קורא ישירות)

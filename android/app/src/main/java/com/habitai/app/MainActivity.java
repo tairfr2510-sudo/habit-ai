@@ -8,5 +8,6 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HabitWidgetPlugin.class);
         super.onCreate(savedInstanceState);
+        GarminBridge.init(this);
     }
 }

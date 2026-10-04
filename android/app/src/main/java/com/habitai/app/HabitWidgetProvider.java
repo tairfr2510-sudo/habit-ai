@@ -91,34 +91,52 @@ public class HabitWidgetProvider extends AppWidgetProvider {
         JSONObject snapshot = readSnapshot(context);
         if (snapshot == null) return;
 
-        try {
-            String date = snapshot.optString("date", "");
-            JSONArray habits = snapshot.optJSONArray("habits");
-            if (habits == null) return;
-
-            for (int i = 0; i < habits.length(); i++) {
-                JSONObject habit = habits.getJSONObject(i);
-                if (!habitId.equals(habit.optString("id"))) continue;
-
-                boolean newDone = !habit.optBoolean("done", false);
-                habit.put("done", newDone);
-                int doneCount = snapshot.optInt("doneHabits", 0) + (newDone ? 1 : -1);
-                snapshot.put("doneHabits", Math.max(0, doneCount));
-                writeSnapshot(context, snapshot);
-
-                JSONObject pendingAction = new JSONObject();
-                pendingAction.put("type", "toggleHabit");
-                pendingAction.put("habitId", habitId);
-                pendingAction.put("date", date);
-                pendingAction.put("done", newDone);
-                queuePendingAction(context, pendingAction);
-                break;
+        JSONArray habits = snapshot.optJSONArray("habits");
+        if (habits == null) return;
+        for (int i = 0; i < habits.length(); i++) {
+            JSONObject habit = habits.optJSONObject(i);
+            if (habit != null && habitId.equals(habit.optString("id"))) {
+                setHabitDone(context, habitId, snapshot.optString("date", ""), !habit.optBoolean("done", false));
+                return;
             }
+        }
+    }
+
+    /**
+     * קובע מצב סופי של הרגל בתאריך נתון - משותף ללחיצה בוויג'ט ולסימון מהשעון
+     * (GarminBridge). מעדכן אופטימית את ה-snapshot (רק אם התאריך הוא התאריך
+     * שלו), מוסיף פעולה ממתינה ל-JS, ומרענן את הוויג'ט ואת השעון.
+     */
+    static void setHabitDone(Context context, String habitId, String date, boolean done) {
+        try {
+            JSONObject snapshot = readSnapshot(context);
+            JSONArray habits = snapshot != null ? snapshot.optJSONArray("habits") : null;
+            if (habits != null && date.equals(snapshot.optString("date", ""))) {
+                for (int i = 0; i < habits.length(); i++) {
+                    JSONObject habit = habits.getJSONObject(i);
+                    if (!habitId.equals(habit.optString("id"))) continue;
+                    if (habit.optBoolean("done", false) != done) {
+                        habit.put("done", done);
+                        int doneCount = snapshot.optInt("doneHabits", 0) + (done ? 1 : -1);
+                        snapshot.put("doneHabits", Math.max(0, doneCount));
+                        writeSnapshot(context, snapshot);
+                    }
+                    break;
+                }
+            }
+
+            JSONObject pendingAction = new JSONObject();
+            pendingAction.put("type", "toggleHabit");
+            pendingAction.put("habitId", habitId);
+            pendingAction.put("date", date);
+            pendingAction.put("done", done);
+            queuePendingAction(context, pendingAction);
         } catch (JSONException e) {
             // מתעלמים - הוויג'ט פשוט לא יתעדכן אופטימית עד לפתיחת האפליקציה הבאה
         }
 
         refreshAllWidgets(context);
+        GarminBridge.sendSnapshot();
     }
 
     private void handleAddWater(Context context) {

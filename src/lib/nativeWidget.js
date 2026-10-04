@@ -52,6 +52,13 @@ export async function syncWidgetSnapshot(habits, waterStats, streakExemptions) {
   }
 }
 
+// נקרא כשהצד הנייטיבי הוסיף פעולות ממתינות בזמן שהאפליקציה פתוחה (למשל סימון
+// הרגל מהשעון), כדי שייושמו מיד. מחזיר handle עם remove().
+export function onWidgetPendingActions(callback) {
+  if (!isNativePlatform()) return Promise.resolve({ remove: () => {} });
+  return HabitWidget.addListener('pendingActions', callback);
+}
+
 // פעולות שבוצעו ישירות מהוויג'ט (סימון הרגל / הוספת מים) בזמן שהאפליקציה לא הייתה
 // פתוחה. הצד הנייטיבי רק צובר אותן ב-Preferences; היישום בפועל על ה-state האמיתי
 // קורה כאן, כשהאפליקציה נפתחת, כדי לא לשכפל את לוגיקת ההרגלים/סטריקים בצד הנייטיבי.
