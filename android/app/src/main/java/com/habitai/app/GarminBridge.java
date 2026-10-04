@@ -1,6 +1,7 @@
 package com.habitai.app;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.garmin.android.connectiq.ConnectIQ;
 import com.garmin.android.connectiq.IQApp;
@@ -31,6 +32,8 @@ final class GarminBridge {
     // חייב להתאים ל-id שב-garmin/manifest.xml (שם הוא בלי מקפים)
     private static final String WATCH_APP_ID = "d0a31b02-014c-44d0-b79f-9abe45e201d8";
 
+    private static final String TAG = "HabitAI-Garmin";
+
     private static final IQApp watchApp = new IQApp(WATCH_APP_ID);
     private static ConnectIQ connectIQ;
     private static Context appContext;
@@ -45,6 +48,7 @@ final class GarminBridge {
         connectIQ.initialize(appContext, false, new ConnectIQ.ConnectIQListener() {
             @Override
             public void onSdkReady() {
+                Log.i(TAG, "SDK ready");
                 ready = true;
                 registerForWatchMessages();
                 sendSnapshot();
@@ -52,6 +56,7 @@ final class GarminBridge {
 
             @Override
             public void onInitializeError(ConnectIQ.IQSdkErrorStatus status) {
+                Log.w(TAG, "init error: " + status);
                 ready = false;
             }
 
@@ -65,9 +70,11 @@ final class GarminBridge {
     private static void registerForWatchMessages() {
         try {
             for (IQDevice device : connectIQ.getKnownDevices()) {
+                Log.i(TAG, "registering device " + device.getFriendlyName());
                 connectIQ.registerForAppEvents(device, watchApp, GarminBridge::onWatchMessage);
             }
         } catch (Exception e) {
+            Log.w(TAG, "register failed", e);
             // אין שעון מצומד / Garmin Connect לא זמין - אין מה לעשות
         }
     }
@@ -81,9 +88,10 @@ final class GarminBridge {
         Map<String, Object> message = toWatchMessage(snapshot);
         try {
             for (IQDevice device : connectIQ.getConnectedDevices()) {
-                connectIQ.sendMessage(device, watchApp, message, (d, app, status) -> { });
+                connectIQ.sendMessage(device, watchApp, message, (d, app, status) -> Log.i(TAG, "snapshot to " + d.getFriendlyName() + ": " + status));
             }
         } catch (Exception e) {
+            Log.w(TAG, "send failed", e);
             // השעון לא מחובר כרגע - הוא יקבל snapshot בשינוי הבא
         }
     }
@@ -110,6 +118,7 @@ final class GarminBridge {
     }
 
     private static void onWatchMessage(IQDevice device, IQApp app, List<Object> data, ConnectIQ.IQMessageStatus status) {
+        Log.i(TAG, "message from watch: " + status + " " + data);
         if (status != ConnectIQ.IQMessageStatus.SUCCESS || data == null) return;
         for (Object item : data) {
             if (!(item instanceof Map)) continue;
